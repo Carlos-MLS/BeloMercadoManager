@@ -1,0 +1,818 @@
+%==========================================================================
+% CAPÍTULO 4 — ARQUITETURA E DESIGN DO SOFTWARE UTILIZANDO LLM
+%==========================================================================
+%
+
+
+\chapter{Arquitetura e Design do Software utilizando LLM}
+\label{cap:arquitetura}
+
+%==========================================================================
+\section{Visão Geral da Arquitetura}
+%==========================================================================
+
+    A arquitetura do sistema \textbf{Belo Mercado Manager} foi concebida para responder a um conjunto de necessidades operacionais e de gestão claramente identificadas nas etapas anteriores: assegurar uma operação diária fluida em cada loja (registo de vendas, gestão de \textit{stock}, encomendas a fornecedores), garantir uma visão consolidada e centralizada do desempenho da cadeia para o Administrador, e cumprir os requisitos de proteção de dados pessoais (RGPD). A conformidade fiscal certificada da Autoridade Tributária está fora do âmbito do projeto, conforme documentado na ADR-009.
+
+    O sistema adota uma arquitetura \textbf{em camadas (\textit{layered architecture}) com uma instância única centralizada}, na qual todas as lojas se ligam à mesma aplicação \textit{web} através da Internet. Este modelo simplifica a implantação e a manutenção evolutiva (uma única \textit{base-line} de código, uma única base de dados, uma única \textit{pipeline} de \textit{deploy}), evita problemas de divergência de dados entre instâncias e elimina a complexidade associada à sincronização entre nós distribuídos. A justificação detalhada desta escolha encontra-se na \textit{Architecture Decision Record} ADR-001 (Secção~\ref{sec:adrs}).
+
+    A arquitetura está organizada em três camadas lógicas:
+
+\begin{itemize}
+    \item \textbf{Camada de Apresentação (UI)}: composta por duas aplicações \textit{web} servidas a partir do mesmo servidor central --- \texttt{POSWebUI} (interface de ponto de venda, otimizada para velocidade e simplicidade de operação) e \texttt{BackofficeWebUI} (portal de gestão para Gerentes de Loja, Administrador da Cadeia e Administrador IT). Ambas são desenvolvidas em \textbf{Blazor}, sobre o ecossistema \textit{.NET}.
+
+    \item \textbf{Camada de Aplicação (\textit{Business Logic})}: contém os serviços que implementam as regras de negócio, organizados por domínio funcional --- \texttt{AuthAccessService}, \texttt{SalesService}, \texttt{InventoryService}, \texttt{ProcurementService}, \texttt{CatalogService}, \texttt{ReportingService}, \texttt{StoreManagementService} e \texttt{AuditService}. Inclui ainda dois componentes de execução agendada: \texttt{ConsolidationScheduler} (responsável pela geração de agregados diários e materialização de KPIs) e \texttt{ReplenishmentScheduler} (responsável por gerar sugestões automáticas de reposição).
+
+    \item \textbf{Camada de Persistência}: composta pelo componente \texttt{RelationalPersistence}, que abstrai o acesso à base de dados relacional, e pela própria base de dados \texttt{BeloMercadoDB}. A escolha de uma base de dados relacional decorre da natureza fortemente transacional e estruturada do domínio (vendas, faturação, \textit{stock}), bem como dos requisitos de integridade ACID (RNF-06).
+\end{itemize}
+
+    A arquitetura segue o princípio da \textbf{separação de responsabilidades}: cada componente tem uma fronteira funcional bem definida e comunica com os restantes através de interfaces explícitas (descritas no diagrama de componentes da Secção~\ref{subsec:componentes}). Esta organização favorece a manutenibilidade (RNF-14), a testabilidade e a evolução incremental do sistema --- novos casos de uso podem ser adicionados a um serviço existente sem impactar os restantes.
+
+    O \texttt{AuditService} ocupa um papel \textbf{transversal}: é invocado por todos os outros serviços para registar eventos relevantes do ponto de vista de segurança, auditoria e conformidade (RF18, RNF-08, RNF-10). Esta abordagem centraliza a política de auditoria num único componente, evitando a dispersão de lógica de \textit{logging} pelo código de domínio.
+
+    O acesso ao sistema é controlado pelo \texttt{AuthAccessService}, que implementa autenticação baseada em \textit{JSON Web Tokens} (JWT) com \textit{refresh tokens}, conforme detalhado no diagrama de sequência SD-UC15 (Secção~\ref{subsec:sequencias}). As permissões diferenciadas por perfil (Administrador da Cadeia, Gerente de Loja, Operador de Caixa, Administrador IT) são aplicadas ao nível de cada serviço, com base nas \textit{claims} contidas no \textit{token}.
+
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=\linewidth]{images/Arquitetura da Solucao.drawio.png}
+        \caption{Arquitetura global da solução.}
+        \label{fig:arquitetura-solucao}
+    \end{figure}
+
+    \begin{tcolorbox}[title=Interação com o LLM]
+    \textbf{Prompt utilizado}
+
+    Atua como Arquiteto de \textit{Software} sénior. Com base nos requisitos funcionais (RF01--RF19), nos requisitos não funcionais (RNF-01 a RNF-16) e nos casos de uso já definidos para o sistema Belo Mercado Manager, propõe uma arquitetura global adequada ao contexto: cadeia de 5 lojas de retalho de proximidade, \textit{stack} fixada em Blazor/.NET com base de dados relacional, projeto académico de 5 alunos durante 3 semanas. Avalia as alternativas (instância centralizada única vs. instância por loja com sincronização) e justifica a escolha. Identifica os componentes principais e o estilo arquitetural recomendado.
+
+    \tcblower
+
+    \textbf{Análise crítica}
+
+    A resposta inicial do LLM apresentou uma proposta excessivamente sofisticada, recomendando uma arquitetura híbrida com instâncias autónomas por loja, padrão de \textit{transactional outbox} e modelo de \textit{Clean Architecture} com elementos de DDD. Embora tecnicamente sólida, esta abordagem foi considerada desproporcionada para o âmbito académico e para o prazo de 3 semanas disponível para a Etapa 2. A equipa optou por uma topologia mais simples (instância única centralizada) e uma arquitetura em camadas clássica, justificada na ADR-001. O LLM mostrou-se eficaz a clarificar \textit{trade-offs} entre as alternativas e a articular a justificação da escolha, mas tendeu sistematicamente a sobrestimar a complexidade necessária --- foi essencial impor explicitamente as restrições de prazo e de equipa em cada \textit{prompt} para obter respostas adequadas ao contexto.
+    \end{tcolorbox}
+
+%==========================================================================
+\section{Arquitetura da Camada de Negócios}
+%==========================================================================
+
+    Esta secção descreve em detalhe a estrutura interna da camada de negócios, recorrendo a diagramas UML produzidos com o auxílio de LLM e finalizados em \textit{Visual Paradigm}: o diagrama de classes do domínio, os diagramas de sequência dos casos de uso prioritários, e o diagrama de componentes que sintetiza a organização funcional do sistema.
+
+%--------------------------------------------------------------------------
+\subsection{Diagrama de Classes}
+\label{subsec:classes}
+%--------------------------------------------------------------------------
+
+    O diagrama de classes (Figura~\ref{fig:diagrama-classes}) modela as entidades centrais do domínio do sistema, organizadas em \textbf{8 \textit{packages}} que refletem os principais subdomínios identificados na Etapa~1: Vendas, Catálogo, Inventário, Compras, Organização, Segurança, Operação Diária e Relatórios.
+
+    Os principais elementos do modelo são:
+
+\begin{itemize}
+    \item \textbf{\textit{Package} Vendas}: contém a classe \texttt{Venda} (registo principal de uma transação no POS), \texttt{LinhaVenda} (cada item da venda), \texttt{Fatura} (documento fiscal emitido) e \texttt{Cliente}, entidade autónoma que armazena os dados mínimos necessários para emissão de fatura nominativa --- NIF, nome (opcional), email (opcional) e data de criação. \texttt{Cliente} é independente de \texttt{Utilizador} (são entidades com naturezas distintas: \texttt{Cliente} representa o consumidor externo identificado por NIF; \texttt{Utilizador} representa o funcionário que opera o sistema), associando-se opcionalmente a \texttt{Venda} e a \texttt{Fatura} apenas quando o consumidor solicita identificação fiscal.
+    \item \textbf{\textit{Package} Catálogo}: contém \texttt{Produto} (referência centralizada com EAN-13), \texttt{Categoria} (com suporte a hierarquia) e dois \textit{value objects} --- \texttt{Preco} e \texttt{Quantidade} --- que encapsulam regras de validação e formato.
+    \item \textbf{\textit{Package} Inventário}: contém \texttt{Stock}, que representa o nível de existências de um produto numa loja específica, com limites mínimo e máximo configuráveis.
+    \item \textbf{\textit{Package} Compras}: contém \texttt{Encomenda}, \texttt{LinhaEncomenda} e \texttt{Fornecedor}, suportando o fluxo de aprovisionamento (UC09--UC11).
+    \item \textbf{\textit{Package} Organização}: contém \texttt{Cadeia} (entidade agregadora), \texttt{Loja}, \texttt{Funcionario} e \texttt{GerenteDeLoja} (especialização de \texttt{Funcionario} via generalização UML).
+    \item \textbf{\textit{Package} Segurança}: contém \texttt{Utilizador}, \texttt{Perfil} e \texttt{LogAuditoria}, suportando autenticação, autorização e rastreabilidade.
+    \item \textbf{\textit{Package} Operação Diária}: contém \texttt{CaixaDiaria} (registo de abertura/fecho de caixa) e \texttt{ConsolidacaoDiaria} (registo de cada operação de consolidação executada pelo \textit{scheduler}).
+    \item \textbf{\textit{Package} Relatórios}: contém \texttt{Relatorio}, com suporte a múltiplos tipos (Vendas, \textit{Stock}, Compras, Financeiro, KPI) e exportação em PDF/CSV.
+\end{itemize}
+
+    O modelo recorre a \textbf{\textit{enums}} para representar estados e tipos discretos: \texttt{EstadoVenda}, \texttt{EstadoEncomenda}, \texttt{EstadoCaixa}, \texttt{EstadoConsolidacao}, \texttt{MetodoPagamento} e \texttt{TipoRelatorio}. Esta abordagem garante consistência de valores e simplifica validações.
+
+    As principais relações são de \textbf{composição} (e.g., \texttt{Venda} compõe-se de \texttt{LinhaVenda}; \texttt{Encomenda} compõe-se de \texttt{LinhaEncomenda}) e de \textbf{associação} com cardinalidades explícitas. A cardinalidade \texttt{Loja 1 -- 0..* Stock} reflete o facto de cada produto ter um nível de \textit{stock} próprio em cada loja, permitindo gestão local autónoma do inventário ainda que o catálogo seja partilhado entre lojas (RF05).
+
+    Note-se que o atributo \texttt{hashIntegridade} originalmente previsto na classe \texttt{ConsolidacaoDiaria} foi removido em virtude da topologia adotada: como não existe transferência de dados entre nós distribuídos, a integridade da consolidação é garantida pelas propriedades ACID das transações da base de dados, tornando o \textit{hash} de integridade redundante. Esta decisão está documentada na ADR-006.
+
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=\linewidth]{images/Diagrama De Classes.jpg}
+        \caption{Diagrama de classes do sistema.}
+        \label{fig:diagrama-classes}
+    \end{figure}
+
+    \begin{tcolorbox}[title=Interação com o LLM]
+    \textbf{Prompt utilizado}
+
+    Atua como Arquiteto de \textit{Software}. A partir do modelo de domínio, dos casos de uso (UC01--UC19) e dos requisitos funcionais já definidos para o Belo Mercado Manager, gera um diagrama de classes detalhado em PlantUML. Organiza as classes em \textit{packages} por subdomínio funcional. Identifica \textit{value objects}, \textit{enums} e relações com cardinalidades explícitas. Inclui apenas atributos e métodos que sejam relevantes para o domínio (evita acessores triviais).
+
+    \tcblower
+
+    \textbf{Análise crítica}
+
+    O LLM gerou um diagrama de classes inicial bastante completo, com identificação correta de \textit{value objects} (\texttt{Preco}, \texttt{Quantidade}) e \textit{enums} apropriados. A organização em \textit{packages} foi sugerida espontaneamente e mostrou-se adequada. Foram, no entanto, necessários ajustes manuais: algumas classes vinham com excesso de atributos técnicos (e.g., \textit{timestamps} de criação/modificação em todas as entidades) que poluíam a leitura do diagrama; foi introduzida a classe \texttt{Cliente} apenas após segunda iteração, quando se notou que a fatura com NIF pressupunha esta entidade; a generalização \texttt{GerenteDeLoja} $\rightarrow$ \texttt{Funcionario} foi sugerida pelo LLM e aceite por refletir o papel especializado deste perfil. A decisão de remover o atributo \texttt{hashIntegridade} de \texttt{ConsolidacaoDiaria} foi tomada pela equipa após reavaliação da topologia (passagem de instância híbrida para centralizada) e o LLM confirmou que era seguro fazê-lo, dado que a integridade passa a ser garantida pelas transações ACID.
+    \end{tcolorbox}
+
+%--------------------------------------------------------------------------
+\subsection{Diagramas de Sequência}
+\label{subsec:sequencias}
+%--------------------------------------------------------------------------
+
+    Foram modelados diagramas de sequência para os casos de uso considerados \textbf{prioritários} pela sua centralidade operacional ou pela complexidade dos fluxos envolvidos: UC01 (Registar Venda), UC04 (Abrir e Fechar Caixa), UC10 (Criar Encomenda a Fornecedor), UC12 (Consolidar Dados Diários) e UC15 (Autenticar no Sistema). Os restantes casos de uso seguem padrões de interação suficientemente próximos destes para que a sua descrição em sequência fosse considerada redundante para efeitos de documentação arquitetural.
+
+\subsubsection{SD-UC01 --- Registar Venda (POS)}
+
+    O diagrama SD-UC01 (Figura~\ref{fig:sd-uc01}) descreve o fluxo nuclear do sistema: o registo de uma venda no posto de caixa. O Operador de Caixa inicia uma sessão de venda através da \texttt{POSWebUI}, que invoca o \texttt{SalesService} para criar a sessão. O \texttt{SalesService} valida que existe uma caixa do dia aberta (consultando a camada de persistência), sem a qual nenhuma venda pode ser registada (RN01 do UC01).
+
+    Para cada item adicionado à venda, o \texttt{SalesService} coordena três operações: obtém o preço e regras aplicáveis junto do \texttt{CatalogService} (incluindo aplicação automática de promoções, RF03); reserva o \textit{stock} junto do \texttt{InventoryService}; e atualiza os totais da venda. O fluxo prevê um cenário de exceção --- \textit{stock} insuficiente --- que devolve um erro de negócio à interface, permitindo ao operador ajustar a quantidade.
+
+    Quando o operador finaliza a venda, o \texttt{SalesService} persiste a venda, as suas linhas e a fatura numa única transação atómica (garantindo RNF-06). Se a persistência falhar, é feito \textit{rollback} e o operador é notificado; se for bem-sucedida, é registado um evento no \texttt{AuditService} (\texttt{VENDA\_FINALIZADA}) e a interface confirma a conclusão da venda com o número de fatura emitido.
+
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=\linewidth]{images/uc01 Registar Venda.jpg}
+        \caption{SD-UC01 --- Registar Venda.}
+        \label{fig:sd-uc01}
+    \end{figure}
+
+\subsubsection{SD-UC04 --- Abrir e Fechar Caixa}
+
+    O diagrama SD-UC04 (Figura~\ref{fig:sd-uc04}) descreve dois fluxos relacionados: a abertura de caixa no início do turno, e o fecho de caixa no final do dia. Na abertura, o operador introduz o fundo inicial; o \texttt{SalesService} valida que não existe outra caixa aberta para a loja no mesmo dia (RN01 do UC04, ``1 caixa por loja por dia'') e cria o registo \texttt{CaixaDiaria}.
+
+    No fecho, o sistema calcula o valor esperado em caixa (com base nas vendas registadas) e compara-o com o valor contado pelo operador, calculando a diferença. O fecho de caixa é o evento que \textbf{aciona a consolidação diária} (UC12), através de uma chamada ao \texttt{ConsolidationScheduler}. Esta integração entre fluxos garante que os agregados diários ficam disponíveis no \textit{dashboard} do Administrador o mais cedo possível, sem necessidade de esperar pelo \textit{trigger} agendado das 23h30.
+
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=\linewidth]{images/uc04 Abrir Fechar Caixa.jpg}
+        \caption{SD-UC04 --- Abrir e Fechar Caixa.}
+        \label{fig:sd-uc04}
+    \end{figure}
+
+\subsubsection{SD-UC10 --- Criar Encomenda a Fornecedor}
+
+    O diagrama SD-UC10 (Figura~\ref{fig:sd-uc10}) descreve o fluxo de criação de uma encomenda a fornecedor pelo Gerente de Loja. O fluxo divide-se em três fases: criação do rascunho (com validação de fornecedor ativo), adição de linhas (com consulta do estado de \textit{stock} ao \texttt{InventoryService} para apoiar a decisão), e submissão final da encomenda. Cada transição de estado é registada no \texttt{AuditService}.
+
+    A interação entre \texttt{ProcurementService} e \texttt{InventoryService} ilustra um padrão comum no sistema: serviços de domínio diferentes colaboram através de interfaces explícitas, sem partilha direta de dados. Esta abordagem mantém a coesão de cada serviço e facilita a sua evolução independente.
+
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=\linewidth]{images/uc10 Criar Encomenda.jpg}
+        \caption{SD-UC10 --- Criar Encomenda a Fornecedor.}
+        \label{fig:sd-uc10}
+    \end{figure}
+
+\subsubsection{SD-UC12 --- Consolidar Dados Diários}
+
+    O diagrama SD-UC12 (Figura~\ref{fig:sd-uc12}) foi reformulado em virtude da adoção da topologia centralizada (ADR-001). Na topologia inicialmente considerada (instância por loja com sincronização para o central), a consolidação envolvia transferência de dados via API entre nós distintos, com chave de idempotência e \textit{hash} de integridade do \textit{payload}. Na topologia atual, todos os dados já estão na base de dados central desde o momento da sua criação, pelo que a consolidação deixa de ser uma operação de transferência e passa a ser uma operação de \textbf{agregação e materialização} de dados para fins analíticos e operacionais.
+
+    O \texttt{ConsolidationScheduler} dispara a consolidação por dois \textit{triggers} possíveis: imediatamente após o fecho de caixa de uma loja (\textit{trigger} \texttt{FechoCaixa}, propagado a partir do SD-UC04), ou pelo \textit{cron} agendado das 23h30 (\textit{trigger} \texttt{Agendado}). Para cada loja com fecho de caixa concluído, o \texttt{ConsolidationService} colabora com \texttt{SalesService}, \texttt{InventoryService} e \texttt{ReportingService} para calcular agregados de vendas, movimentos de \textit{stock} e KPIs do dia. Os resultados são persistidos em tabelas de leitura denormalizadas (consultadas diretamente pelo \textit{dashboard}) e o evento de sucesso é registado no \texttt{AuditService}.
+
+    O cenário de exceção --- falha no cálculo de agregados (e.g., \textit{timeout} de \textit{query}, \textit{deadlock}) --- aciona uma estratégia de retentativa em 30, 60 e 90 minutos (RNF-07), mantendo a robustez do processo sem necessidade de intervenção manual.
+
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=\linewidth]{images/uc12 Consolidar Dados.jpg}
+        \caption{SD-UC12 --- Consolidar Dados Diários (topologia centralizada).}
+        \label{fig:sd-uc12}
+    \end{figure}
+
+\subsubsection{SD-UC15 --- Autenticar no Sistema}
+
+    O diagrama SD-UC15 (Figura~\ref{fig:sd-uc15}) descreve o fluxo de autenticação. O utilizador submete credenciais à \texttt{WebUI}, que invoca o \texttt{AuthAccessService}. Este obtém o utilizador da base de dados, verifica o \textit{hash} da \textit{password} e valida o estado da conta (ativa, não bloqueada).
+
+    O fluxo prevê três cenários: credenciais inválidas (incrementa o contador de tentativas falhadas, bloqueando a conta após 5 tentativas conforme RN01 do UC15, retornando 401); conta bloqueada (retorna 423); \textit{login} válido (atualiza \textit{último login}, regista evento de auditoria e devolve um par JWT + \textit{refresh token} à interface, juntamente com o perfil do utilizador para fins de redirecionamento). O JWT inclui as \textit{claims} necessárias para autorização nos restantes serviços (\texttt{sub}, \texttt{role}, \texttt{lojaId}, \texttt{exp}).
+
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=\linewidth]{images/uc15 Autentica Sistema.jpg}
+        \caption{SD-UC15 --- Autenticar no Sistema.}
+        \label{fig:sd-uc15}
+    \end{figure}
+
+    \begin{tcolorbox}[title=Interação com o LLM]
+    \textbf{Prompt utilizado}
+
+    Atua como Arquiteto de \textit{Software}. Para cada um dos casos de uso prioritários (UC01, UC04, UC10, UC12, UC15), gera um diagrama de sequência em PlantUML que mostre as interações entre o ator, a UI, os serviços de aplicação envolvidos, a camada de persistência e o \texttt{AuditService}. Inclui fluxos alternativos e de exceção relevantes (\texttt{alt}/\texttt{else}). Mantém consistência de nomes de serviços com o diagrama de componentes.
+
+    \tcblower
+
+    \textbf{Análise crítica}
+
+    O LLM mostrou-se particularmente eficaz na geração de diagramas de sequência: as interações propostas eram quase sempre coerentes com o diagrama de componentes e com as regras de negócio dos casos de uso. Foram necessárias correções pontuais --- por exemplo, o fluxo inicial do SD-UC01 não validava a caixa aberta antes de criar a sessão de venda, o que foi acrescentado por insistência da equipa; e o SD-UC15 não previa inicialmente o cenário de conta bloqueada como caso distinto. A reformulação do SD-UC12 (de modelo distribuído para modelo centralizado) foi feita iterativamente: o LLM produziu uma primeira proposta que ainda continha vestígios da topologia anterior (chave de idempotência, \textit{hash} de \textit{payload}), e foi necessário um segundo \textit{prompt} explicitando a topologia A para obter um diagrama coerente.
+    \end{tcolorbox}
+
+%--------------------------------------------------------------------------
+\subsection{Diagrama de Componentes}
+\label{subsec:componentes}
+%--------------------------------------------------------------------------
+
+    O diagrama de componentes (Figura~\ref{fig:diagrama-componentes}) sintetiza a organização funcional do sistema, identificando os componentes principais, as suas dependências e as interfaces que expõem. Os componentes estão agrupados em três \textit{packages} correspondentes às camadas arquiteturais: \textbf{UI} (2 componentes), \textbf{Application} (10 componentes) e \textbf{Persistence} (2 componentes).
+
+    Cada componente da camada de Application expõe uma ou mais interfaces lógicas (e.g., \texttt{ISalesApi}, \texttt{ICaixaApi}, \texttt{IStockApi}) que são consumidas pela camada de UI. Esta separação por interface --- em vez de uma API monolítica --- documenta com precisão as fronteiras de responsabilidade de cada serviço e facilita a substituição ou reimplementação de componentes individuais.
+
+    A camada de Application acede à base de dados exclusivamente através do componente \texttt{RelationalPersistence}, que abstrai os detalhes do ORM (\textit{Entity Framework Core}) e expõe interfaces orientadas a domínio (\texttt{IUserRepository}, \texttt{IProductRepository}, \texttt{IStockRepository}, etc.). Esta abordagem isola o código de domínio das tecnologias de persistência e melhora a testabilidade.
+
+    O \texttt{AuditService} é representado com setas \textbf{transversais} --- todos os outros componentes da camada de Application invocam-no para registar eventos. Esta dependência transversal é deliberada: garante que a auditoria não pode ser ignorada acidentalmente em nenhum fluxo de negócio.
+
+    O mapeamento entre casos de uso e componentes primários (incluído na nota inferior do diagrama) facilita a rastreabilidade entre requisitos e arquitetura, e é detalhado na matriz de rastreabilidade (Secção~\ref{sec:rastreabilidade}).
+
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=\linewidth]{images/Diagrama de Componentes.jpg}
+        \caption{Diagrama de componentes.}
+        \label{fig:diagrama-componentes}
+    \end{figure}
+
+    \begin{tcolorbox}[title=Interação com o LLM]
+    \textbf{Prompt utilizado}
+
+    Com base no diagrama de classes e nos casos de uso, gera um diagrama de componentes em PlantUML para o sistema Belo Mercado Manager. Organiza os componentes em camadas (UI, Application, Persistence). Para cada componente da camada de Application, identifica a(s) interface(s) que expõe. Indica o componente primário responsável por cada caso de uso. Modela o \texttt{AuditService} como dependência transversal a todos os outros serviços.
+
+    \tcblower
+
+    \textbf{Análise crítica}
+
+    A proposta inicial do LLM agrupava todas as funcionalidades em três ou quatro componentes muito genéricos (\texttt{UserService}, \texttt{BusinessService}, \texttt{ReportService}), o que perdia a granularidade necessária para refletir os 19 casos de uso. Foi necessário um \textit{prompt} explícito de refinamento: ``divide os componentes da camada de Application por domínio funcional, com cardinalidade aproximada de um componente por subdomínio do diagrama de classes''. Após este refinamento, a proposta convergiu para os 10 componentes apresentados, com mapeamento UC$\rightarrow$componente coerente. A separação dos \textit{schedulers} (\texttt{ConsolidationScheduler}, \texttt{ReplenishmentScheduler}) como componentes próprios foi sugerida pela equipa para distinguir claramente os fluxos disparados por agendamento dos fluxos síncronos disparados por utilizador.
+    \end{tcolorbox}
+
+%==========================================================================
+\section{Arquitetura da Camada de Dados}
+\label{sec:dados}
+%==========================================================================
+
+\subsection{Modelo Lógico}
+\label{subsec:modelo-logico}
+
+    O modelo lógico de dados deriva do diagrama de classes (Secção~\ref{subsec:classes}) através de mapeamento objeto-relacional, com adaptações específicas decorrentes das decisões arquiteturais tomadas. Cada classe não-abstrata é representada por uma tabela; relações de composição traduzem-se em chaves estrangeiras com integridade referencial; \textit{value objects} (\texttt{Preco}, \texttt{Quantidade}) foram \textbf{normalizados em tabelas próprias} (\texttt{Preco}) ou embebidos como colunas (quantidades em \texttt{LinhaVenda}); \textit{enums} são representados como colunas \texttt{VARCHAR} com restrição \texttt{CHECK}.
+
+    O modelo lógico introduz \textbf{cinco tabelas adicionais} face à modelação inicial do diagrama de classes, decorrentes de requisitos identificados durante a especificação da arquitetura:
+
+    \begin{itemize}
+        \item \texttt{Promocao}, \texttt{PromocaoLoja} e \texttt{LinhaVendaPromocao} --- suportam o requisito RF03 (UC03 \textit{Aplicar Promoções e Descontos}), ausentes do diagrama de classes inicial;
+        \item \texttt{KPIDiario} e \texttt{RankingProdutosDiario} --- tabelas de leitura denormalizadas materializadas pelo \texttt{ConsolidationScheduler} (UC12), conforme reformulação descrita na ADR-006.
+    \end{itemize}
+
+    A tabela \texttt{Fatura} mantém uma estrutura simplificada (número fiscal sequencial por loja/ano, referência opcional ao cliente, totais e referência à venda), por se tratar de uma implementação académica que não exige conformidade fiscal certificada (ver ADR-009). A entidade \texttt{Cliente} é representada como tabela própria (\texttt{cliente\_id}, \texttt{nif}, \texttt{nome}, \texttt{email}, \texttt{data\_criacao}) e relaciona-se com \texttt{Venda} através de chave estrangeira opcional \texttt{cliente\_id} em \texttt{Venda}, refletindo a cardinalidade \texttt{0..*~--~0..1} (a maioria das vendas é a consumidor final não identificado e não exige registo do cliente). A tabela \texttt{Cliente} é totalmente independente da tabela \texttt{Utilizador} --- são entidades com naturezas e ciclos de vida distintos, e qualquer relação direta entre ambas seria semanticamente incorreta (um \texttt{Utilizador} é um funcionário interno com credenciais de acesso ao sistema, enquanto um \texttt{Cliente} é apenas um registo de identificação fiscal de um consumidor externo).
+
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=\linewidth]{images/Modelo Logico.jpg}
+        \caption{Modelo lógico de dados.}
+        \label{fig:modelo-logico}
+    \end{figure}
+
+    O esquema completo conta com 26 tabelas, organizadas pelos mesmos subdomínios do diagrama de classes. As principais convenções adotadas são:
+
+    \begin{itemize}
+        \item Chaves primárias do tipo \texttt{UUID}, geradas pela aplicação ou pela base de dados (\texttt{uuid\_generate\_v4()}), evitando dependência de sequências e simplificando integração;
+        \item Restrições de integridade referencial em todas as chaves estrangeiras, com \texttt{ON DELETE CASCADE} apenas onde existe relação de composição forte (\texttt{LinhaVenda~$\rightarrow$~Venda}, \texttt{LinhaEncomenda~$\rightarrow$~Encomenda});
+        \item Restrições \texttt{CHECK} para validação de domínios (estados, taxas de IVA, valores não-negativos);
+        \item Índices secundários em colunas frequentemente filtradas (\texttt{loja\_id+data\_hora} em \texttt{Venda}, \texttt{loja\_id+data\_referencia} em \texttt{KPIDiario}, etc.);
+        \item Restrições \texttt{UNIQUE} para invariantes de domínio (uma caixa por loja por dia, um produto por loja em \texttt{Stock}, série/número de fatura único).
+    \end{itemize}
+
+    O DDL completo para SQL Server, incluindo todas as restrições, índices e \textit{check constraints}, está disponível no repositório Git do projeto, no ficheiro \texttt{database/ddl\_belomercado.sql}, sendo omitido deste relatório por questões de extensão.
+
+    \begin{tcolorbox}[title=Interação com o LLM]
+    \textbf{Prompt utilizado}
+
+    Atua como Engenheiro de Dados. A partir do diagrama de classes do Belo Mercado Manager e das decisões arquiteturais tomadas (ADR-001 a ADR-010), produz o modelo lógico relacional, identificando: (1) tabelas em falta no diagrama de classes (e.g., promoções, agregados de leitura); (2) restrições de integridade (\texttt{UNIQUE}, \texttt{CHECK}, \texttt{ON DELETE}); (3) índices secundários que suportem as \textit{queries} mais frequentes dos casos de uso. Gera o resultado em formato DBML e DDL para SQL Server.
+
+    \tcblower
+
+    \textbf{Análise crítica}
+
+    O LLM revelou-se eficaz a detectar incoerências entre o diagrama de classes e os requisitos --- nomeadamente a ausência total de modelação de promoções no diagrama, apesar do RF03 e do UC03 as exigirem; e a duplicação de \texttt{email} entre \texttt{Funcionario} e \texttt{Utilizador}. A primeira proposta do LLM tendeu, no entanto, a sobre-modelar o domínio (e.g., propôs uma tabela \texttt{Endereco} normalizada apenas para suportar moradas de fornecedores e clientes, e propôs ainda uma estrutura completa de séries de faturação com encadeamento criptográfico de \textit{hash} para conformidade com a Portaria 363/2010, o que foi rejeitado por se entender que a conformidade fiscal certificada está fora do âmbito de um projeto académico --- ver ADR-009). A decisão de simplificar \texttt{VendaCliente} para chave estrangeira opcional foi sugerida pela equipa após verificar que a cardinalidade real era \texttt{0..1} e não \texttt{0..*}.
+    \end{tcolorbox}
+
+%==========================================================================
+\section{Especificação da API}
+\label{sec:api}
+%==========================================================================
+
+    A API do sistema segue o estilo arquitetural \textbf{REST}, com formato \texttt{application/json} e autenticação baseada em \textit{Bearer JWT} (com exceção do \textit{endpoint} de \textit{login}). A escolha de REST face a alternativas como GraphQL é justificada na ADR-008.
+
+    Convenções gerais aplicáveis a todos os \textit{endpoints}:
+
+\begin{itemize}
+    \item \textbf{\textit{Base path}}: \texttt{/api}.
+    \item \textbf{Autenticação}: cabeçalho \texttt{Authorization: Bearer <jwt>} obrigatório, exceto em \texttt{POST /api/auth/login}.
+    \item \textbf{Versionamento}: prefixo de versão na URL (ex.: \texttt{/api/v1/...}); a versão atual é a v1.
+    \item \textbf{Identificação de loja}: cabeçalho \texttt{X-Store-Id} obrigatório em \textit{endpoints} operacionais que dependem de contexto de loja, validado contra a \textit{claim} \texttt{lojaId} do JWT.
+    \item \textbf{Rastreabilidade}: cabeçalho \texttt{Correlation-Id} opcional, propagado em respostas e \textit{logs} para facilitar diagnóstico.
+    \item \textbf{Erros}: respostas de erro seguem o formato RFC 7807 (\texttt{application/problem+json}) com código de erro de domínio (e.g., \texttt{STOCK\_INSUFICIENTE}, \texttt{AUTH\_INVALID\_CREDENTIALS}) para além do código HTTP.
+\end{itemize}
+
+    Os \textit{endpoints} estão organizados por agregado de domínio. A Tabela~\ref{tab:api-completa} apresenta a especificação completa, com mapeamento explícito a casos de uso.
+
+\begin{table}[H]
+\centering\scriptsize
+\renewcommand{\arraystretch}{1.05}
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{|p{1.4cm}|p{5cm}|p{1.2cm}|p{2.3cm}|p{2.2cm}|}
+\hline
+\textbf{Método} & \textbf{\textit{Path}} & \textbf{UC} & \textbf{Autorização} & \textbf{Erros principais} \\
+\hline
+
+\multicolumn{5}{|l|}{\cellcolor{gray!15}\textbf{Autenticação e Perfil}} \\
+\hline
+POST & \texttt{/api/auth/login} & UC15 & Pública & 401, 423 \\
+\hline
+POST & \texttt{/api/auth/refresh} & UC15 & Refresh token & 401 \\
+\hline
+POST & \texttt{/api/auth/logout} & UC15 & Bearer & 401 \\
+\hline
+GET & \texttt{/api/me} & UC17 & Bearer & 401 \\
+\hline
+PUT & \texttt{/api/me} & UC17 & Bearer & 422 \\
+\hline
+PUT & \texttt{/api/me/password} & UC17 & Bearer & 401, 422 \\
+\hline
+
+\multicolumn{5}{|l|}{\cellcolor{gray!15}\textbf{Vendas e Caixa}} \\
+\hline
+POST & \texttt{/api/vendas} & UC01 & Operador, Gerente & 409, 422 \\
+\hline
+GET & \texttt{/api/vendas/\{id\}} & UC01 & Operador, Gerente & 404 \\
+\hline
+POST & \texttt{/api/vendas/\{id\}/anular} & UC02 & Operador, Gerente & 404, 409, 422 \\
+\hline
+POST & \texttt{/api/vendas/\{id\}/devolucao} & UC02 & Operador, Gerente & 404, 422 \\
+\hline
+POST & \texttt{/api/caixas/abrir} & UC04 & Operador & 409, 422 \\
+\hline
+POST & \texttt{/api/caixas/\{id\}/fechar} & UC04 & Operador & 404, 409, 422 \\
+\hline
+GET & \texttt{/api/caixas/\{id\}} & UC04 & Operador, Gerente & 404 \\
+\hline
+
+\multicolumn{5}{|l|}{\cellcolor{gray!15}\textbf{Promoções}} \\
+\hline
+GET & \texttt{/api/promocoes} & UC03 & Bearer & --- \\
+\hline
+POST & \texttt{/api/promocoes} & UC03 & Admin & 422 \\
+\hline
+PUT & \texttt{/api/promocoes/\{id\}} & UC03 & Admin & 404, 422 \\
+\hline
+DELETE & \texttt{/api/promocoes/\{id\}} & UC03 & Admin & 404, 409 \\
+\hline
+
+\multicolumn{5}{|l|}{\cellcolor{gray!15}\textbf{Catálogo de Produtos}} \\
+\hline
+GET & \texttt{/api/produtos} & UC05 & Bearer & --- \\
+\hline
+GET & \texttt{/api/produtos/\{id\}} & UC05 & Bearer & 404 \\
+\hline
+POST & \texttt{/api/produtos} & UC05 & Admin & 409, 422 \\
+\hline
+PUT & \texttt{/api/produtos/\{id\}} & UC05 & Admin & 404, 422 \\
+\hline
+DELETE & \texttt{/api/produtos/\{id\}} & UC05 & Admin & 404, 409 \\
+\hline
+GET & \texttt{/api/categorias} & UC05 & Bearer & --- \\
+\hline
+POST & \texttt{/api/categorias} & UC05 & Admin & 422 \\
+\hline
+
+\multicolumn{5}{|l|}{\cellcolor{gray!15}\textbf{Inventário}} \\
+\hline
+GET & \texttt{/api/stock} & UC06 & Gerente, Admin & --- \\
+\hline
+GET & \texttt{/api/stock/alertas} & UC06 & Gerente, Admin & --- \\
+\hline
+POST & \texttt{/api/inventarios} & UC07 & Gerente & 409, 422 \\
+\hline
+GET & \texttt{/api/sugestoes-reposicao} & UC08 & Gerente & --- \\
+\hline
+
+\end{tabular}
+\end{adjustbox}
+\caption{Especificação da API REST do sistema Belo Mercado Manager — Parte 1.}
+\label{tab:api-completa-parte1}
+\end{table}
+
+\begin{table}[H]
+\centering\scriptsize
+\renewcommand{\arraystretch}{1.05}
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{|p{1.4cm}|p{5cm}|p{1.2cm}|p{2.3cm}|p{2.2cm}|}
+\hline
+\textbf{Método} & \textbf{\textit{Path}} & \textbf{UC} & \textbf{Autorização} & \textbf{Erros principais} \\
+\hline
+
+\multicolumn{5}{|l|}{\cellcolor{gray!15}\textbf{Fornecedores e Encomendas}} \\
+\hline
+GET & \texttt{/api/fornecedores} & UC09 & Gerente, Admin & --- \\
+\hline
+POST & \texttt{/api/fornecedores} & UC09 & Admin & 409, 422 \\
+\hline
+PUT & \texttt{/api/fornecedores/\{id\}} & UC09 & Admin & 404, 422 \\
+\hline
+POST & \texttt{/api/encomendas} & UC10 & Gerente & 422 \\
+\hline
+GET & \texttt{/api/encomendas} & UC10 & Gerente, Admin & --- \\
+\hline
+GET & \texttt{/api/encomendas/\{id\}} & UC10 & Gerente, Admin & 404 \\
+\hline
+POST & \texttt{/api/encomendas/\{id\}/submeter} & UC10 & Gerente & 404, 409 \\
+\hline
+POST & \texttt{/api/encomendas/\{id\}/rececionar} & UC11 & Gerente & 404, 409, 422 \\
+\hline
+
+\multicolumn{5}{|l|}{\cellcolor{gray!15}\textbf{Relatórios e \textit{Dashboards}}} \\
+\hline
+GET & \texttt{/api/dashboards/kpi} & UC13 & Gerente, Admin & --- \\
+\hline
+GET & \texttt{/api/relatorios} & UC14 & Gerente, Admin & --- \\
+\hline
+POST & \texttt{/api/relatorios/exportar} & UC14 & Gerente, Admin & 422 \\
+\hline
+
+\multicolumn{5}{|l|}{\cellcolor{gray!15}\textbf{Administração e Auditoria}} \\
+\hline
+GET & \texttt{/api/utilizadores} & UC16 & Admin, IT & --- \\
+\hline
+POST & \texttt{/api/utilizadores} & UC16 & Admin, IT & 409, 422 \\
+\hline
+PUT & \texttt{/api/utilizadores/\{id\}} & UC16 & Admin, IT & 404, 422 \\
+\hline
+DELETE & \texttt{/api/utilizadores/\{id\}} & UC16 & Admin, IT & 404 \\
+\hline
+GET & \texttt{/api/auditoria/logs} & UC18 & Admin, IT & --- \\
+\hline
+GET & \texttt{/api/lojas} & UC19 & Admin & --- \\
+\hline
+POST & \texttt{/api/lojas} & UC19 & Admin & 409, 422 \\
+\hline
+PUT & \texttt{/api/lojas/\{id\}} & UC19 & Admin & 404, 422 \\
+\hline
+
+\end{tabular}
+\end{adjustbox}
+\caption{Especificação da API REST do sistema Belo Mercado Manager — Parte 2.}
+\label{tab:api-completa-parte2}
+\end{table}
+
+    \textbf{Notas adicionais sobre \textit{endpoints} críticos:}
+
+    \textbf{\texttt{POST /api/vendas}}: requer cabeçalho \texttt{Idempotency-Key} (UUID) para garantir que retentativas do cliente em caso de falha de rede não geram vendas duplicadas. O servidor mantém um cache de chaves processadas durante 7 dias.
+
+\textbf{\texttt{POST /api/encomendas/\{id\}/submeter}}: encomendas com valor superior a 5000\,€ exigem aprovação adicional do Administrador (devolve 403 com código \texttt{APPROVAL\_REQUIRED} se chamado por Gerente).
+
+    \textbf{\texttt{POST /api/vendas/\{id\}/anular}}: anulações sobre vendas com mais de 24 horas exigem perfil Gerente (devolve 403 com código \texttt{APPROVAL\_REQUIRED} se chamado por Operador), conforme RN01 do UC02.
+
+    \textbf{Operação interna (não exposta como API pública)}: a consolidação diária (UC12) é executada exclusivamente pelo \texttt{ConsolidationScheduler} interno e não dispõe de \textit{endpoint} REST público. Pode, contudo, ser disparada manualmente por um administrador IT através de uma operação de gestão (\texttt{POST /api/admin/consolidacoes/disparar}, sujeita a permissão IT).
+
+    \begin{tcolorbox}[title=Interação com o LLM]
+    \textbf{Prompt utilizado}
+
+    Atua como Arquiteto de \textit{Software}. A partir dos 19 casos de uso (UC01--UC19) e do diagrama de componentes, deriva uma especificação completa de API REST para o sistema Belo Mercado Manager. Para cada \textit{endpoint}, indica método HTTP, \textit{path}, caso de uso associado, perfis autorizados e códigos de erro principais. Aplica convenções REST (verbos HTTP semânticos, recursos pluralizados, sub-recursos para ações específicas).
+
+    \tcblower
+
+    \textbf{Análise crítica}
+
+    A proposta do LLM cobriu adequadamente os 19 casos de uso, com convenções REST bem aplicadas (uso correto de \texttt{POST} para ações não-idempotentes, \texttt{PUT} para atualizações, \textit{nested paths} para sub-recursos como \texttt{/vendas/\{id\}/anular}). Tendência observada e corrigida: o LLM propunha sistematicamente \textit{endpoints} adicionais que não correspondiam a nenhum caso de uso (e.g., \texttt{GET /api/produtos/\{id\}/historico-precos}, \texttt{POST /api/notificacoes}), o que foi removido em revisão para manter a especificação alinhada com os requisitos efetivamente levantados. A decisão de \textbf{não expor publicamente} o \textit{endpoint} de consolidação foi tomada pela equipa, contrariando a sugestão inicial do LLM, por ser uma operação interna que não deve ser invocável por clientes externos.
+    \end{tcolorbox}
+
+%==========================================================================
+\section{Decisões Arquiteturais}
+\label{sec:adrs}
+%==========================================================================
+
+    Esta secção documenta as principais decisões arquiteturais do sistema sob a forma de \textit{Architecture Decision Records} (ADRs), seguindo o formato \textbf{Nygard} (Contexto, Decisão, Consequências). Cada ADR captura uma decisão significativa, as alternativas consideradas e os \textit{trade-offs} aceites, servindo de referência para futuras evoluções do sistema.
+
+%--------------------------------------------------------------------------
+\subsection*{ADR-001 --- Topologia de \textit{Deployment}: Instância Única Centralizada}
+%--------------------------------------------------------------------------
+
+\noindent\textbf{Estado}: Aceite.
+
+\noindent\textbf{Contexto}: O sistema serve uma cadeia de 5 lojas geograficamente dispersas que precisam de operar diariamente e cujos dados consolidados devem estar disponíveis ao Administrador. Foram consideradas três topologias: (a) instância única centralizada, com lojas a ligar via Internet; (b) instância por loja com servidor central de consolidação; (c) modelo híbrido com sincronização bidirecional.
+
+\noindent\textbf{Decisão}: Adoção de \textbf{instância única centralizada} (topologia A). Toda a aplicação \textit{web} é servida por um único \textit{deployment}; as lojas acedem ao sistema através da Internet com autenticação JWT.
+
+\noindent\textbf{Consequências}: Vantagens --- modelo de \textit{deployment} simples (uma única \textit{base-line}, uma única \textit{pipeline} CI/CD); inexistência de problemas de divergência de dados entre instâncias; \textit{dashboards} sempre atualizados em tempo real (a consolidação UC12 deixa de ser de transferência e passa a ser de agregação); manutenção e evolução evolutiva simplificadas. Desvantagens aceites --- o sistema fica dependente da disponibilidade da ligação à Internet em cada loja (o requisito RT05 de operação \textit{offline} foi reavaliado e considerado fora de âmbito para a Etapa 2; o sistema confia na disponibilidade da ligação para a operação POS); a disponibilidade do sistema central torna-se mais crítica (mitigada pelo RNF-04 e RNF-05).
+
+%--------------------------------------------------------------------------
+\subsection*{ADR-002 --- Estilo Arquitetural: Arquitetura em Camadas}
+%--------------------------------------------------------------------------
+
+\noindent\textbf{Estado}: Aceite.
+
+\noindent\textbf{Contexto}: Foi necessário escolher um estilo arquitetural que organizasse o código de forma a favorecer manutenibilidade, testabilidade e clareza. Foram avaliadas três opções: (a) arquitetura em camadas clássica (\textit{N-tier}); (b) \textit{Clean Architecture} com inversão de dependências e DDD tático; (c) arquitetura hexagonal (\textit{ports and adapters}).
+
+\noindent\textbf{Decisão}: Adoção de \textbf{arquitetura em camadas} com três camadas (UI, Application, Persistence) e separação clara de responsabilidades. A camada de Application está organizada por domínio funcional em serviços (\texttt{SalesService}, \texttt{InventoryService}, etc.) que encapsulam regras de negócio.
+
+\noindent\textbf{Consequências}: Vantagens --- estilo amplamente conhecido pela equipa, com \textit{learning curve} reduzida; baixa cerimónia de implementação; alinhado com a documentação oficial de Microsoft para aplicações ASP.NET Core de complexidade moderada. Desvantagens aceites --- não impõe inversão de dependências entre Application e Persistence (a camada de Application depende diretamente do componente \texttt{RelationalPersistence}), o que é mitigado pela utilização de interfaces de repositório; menor adequação a evoluções futuras para microsserviços (não previsto no âmbito).
+
+%--------------------------------------------------------------------------
+\subsection*{ADR-003 --- \textit{Stack} Tecnológica: Blazor + .NET + SQL Server}
+%--------------------------------------------------------------------------
+
+\noindent\textbf{Estado}: Aceite (decisão prévia, mantida).
+
+\noindent\textbf{Contexto}: A \textit{stack} tecnológica é uma restrição técnica do projeto (RT01--RT03), com \textit{.NET}/Blazor para a aplicação \textit{web} e base de dados relacional. A escolha específica do servidor de base de dados foi avaliada nesta etapa.
+
+\noindent\textbf{Decisão}: Utilização de \textbf{Blazor Server} para a UI (POS e \textit{Backoffice}), \textbf{ASP.NET Core} para a camada de Application, \textbf{Entity Framework Core} como ORM e \textbf{Microsoft SQL Server} (com edição Express em ambientes de desenvolvimento e edição Standard ou superior em produção) como sistema de gestão de base de dados.
+
+\noindent\textbf{Consequências}: Vantagens --- ecossistema integrado da Microsoft (forte alinhamento entre .NET, EF Core, SQL Server e ferramentas como SQL Server Management Studio e Azure Data Studio); experiência de desenvolvimento integrada (C\# em \textit{front-end} e \textit{back-end}); SQL Server bem documentado e com edição gratuita (Express) adequada à fase académica e a deployments de pequena dimensão; suporte nativo a \textit{Always Encrypted}, \textit{Transparent Data Encryption} e auditoria, úteis para os requisitos de RGPD (RNF-10). Desvantagens aceites --- Blazor Server depende de uma ligação SignalR persistente, o que reforça a importância da disponibilidade da ligação à Internet (já endereçada pela ADR-001); SQL Server Express tem limites de 10\,GB por base de dados, 1\,GB de RAM e 1 \textit{CPU socket}, o que exigirá migração para edição Standard se a cadeia crescer significativamente; SQL Server tem custos de licenciamento em produção quando os limites do Express forem ultrapassados.
+
+%--------------------------------------------------------------------------
+\subsection*{ADR-004 --- Autenticação e Autorização: JWT com \textit{Refresh Token}}
+%--------------------------------------------------------------------------
+
+\noindent\textbf{Estado}: Aceite.
+
+\noindent\textbf{Contexto}: O sistema requer autenticação de utilizadores com perfis diferenciados (Operador de Caixa, Gerente de Loja, Administrador da Cadeia, Administrador IT) e gestão de sessões compatível com APIs REST.
+
+\noindent\textbf{Decisão}: Adoção de autenticação baseada em \textbf{JWT (JSON Web Tokens)} com \textit{access token} de curta duração (15 minutos) e \textit{refresh token} de duração média (7 dias) com rotação a cada utilização. O JWT inclui as \textit{claims} \texttt{sub}, \texttt{role}, \texttt{lojaId} e \texttt{exp}. A autorização é verificada em cada \textit{endpoint} com base no perfil e, quando aplicável, no \texttt{lojaId} (impedindo que um Gerente de Loja A aceda a dados de Loja B).
+
+\noindent\textbf{Consequências}: Vantagens --- modelo \textit{stateless} compatível com escalabilidade horizontal; revogação suportada via lista negra de \textit{refresh tokens}; compatível com clientes diversos (\textit{web}, móvel se necessário). Desvantagens aceites --- complexidade adicional de gestão de \textit{refresh tokens} (rotação, deteção de reutilização); \textit{tokens} comprometidos só perdem validade no fim da sua duração (mitigado pela curta duração do \textit{access token}).
+
+%--------------------------------------------------------------------------
+\subsection*{ADR-005 --- Estilo de API: REST com OpenAPI}
+%--------------------------------------------------------------------------
+
+\noindent\textbf{Estado}: Aceite.
+
+\noindent\textbf{Contexto}: Foi necessário definir o estilo da API que serve a UI (POS e \textit{Backoffice}) e potencialmente clientes futuros. As opções avaliadas foram REST e GraphQL.
+
+\noindent\textbf{Decisão}: Adoção de \textbf{REST} com convenções HTTP padrão, formato JSON, especificação OpenAPI 3 gerada a partir do código (Swashbuckle/Scalar) e versionamento por prefixo de URL (\texttt{/api/v1}).
+
+\noindent\textbf{Consequências}: Vantagens --- estilo amplamente conhecido pela equipa e pelos consumidores potenciais; \textit{caching} HTTP nativo; ferramentas maduras (Swagger UI, Postman); idempotência expressa em verbos HTTP. Desvantagens aceites --- \textit{over-fetching} possível em alguns endpoints de \textit{dashboard} (mitigado por \textit{endpoints} específicos para casos de uso de leitura intensiva, como \texttt{/api/dashboards/kpi}).
+
+%--------------------------------------------------------------------------
+\subsection*{ADR-006 --- Reformulação da Consolidação Diária (UC12)}
+%--------------------------------------------------------------------------
+
+\noindent\textbf{Estado}: Aceite (substitui versão anterior do SD-UC12).
+
+\noindent\textbf{Contexto}: Na conceção inicial, a consolidação diária pressupunha uma topologia distribuída com transferência de dados entre instâncias por loja e um servidor central, recorrendo a chave de idempotência e \textit{hash} de integridade do \textit{payload}. A adoção da topologia centralizada (ADR-001) tornou redundantes estes mecanismos.
+
+\noindent\textbf{Decisão}: Reformulação do UC12 para deixar de ser uma operação de \textbf{transferência} e passar a ser uma operação de \textbf{agregação e materialização}. O \texttt{ConsolidationScheduler} colabora com os serviços de domínio (\texttt{SalesService}, \texttt{InventoryService}, \texttt{ReportingService}) para calcular agregados diários (KPIs, \textit{rankings} de produtos, alertas de \textit{stock}) e persisti-los em tabelas de leitura denormalizadas. Os atributos \texttt{hashIntegridade} e \texttt{origem} da classe \texttt{ConsolidacaoDiaria} foram removidos por terem perdido significado.
+
+\noindent\textbf{Consequências}: Vantagens --- simplificação significativa da implementação (sem necessidade de API de consolidação, sem gestão de retentativas de rede); \textit{dashboards} podem ser atualizados em tempo quase real; melhor aproveitamento do investimento em índices da base de dados (as \textit{queries} de agregação ocorrem na mesma BD onde os dados estão). Desvantagens aceites --- a operação de consolidação consome recursos da BD central e pode impactar a operação POS se executada em horário de funcionamento (mitigado pela execução noturna às 23h30 e/ou imediatamente após o fecho de cada caixa).
+
+%--------------------------------------------------------------------------
+\subsection*{ADR-007 --- \texttt{AuditService} como Componente Transversal}
+%--------------------------------------------------------------------------
+
+\noindent\textbf{Estado}: Aceite.
+
+\noindent\textbf{Contexto}: Os requisitos RF18 (consultar \textit{logs} de auditoria), RNF-08 (segurança) e RNF-10 (RGPD) exigem que ações relevantes do sistema sejam registadas com rastreabilidade total (utilizador, ação, timestamp, IP, resultado). Foram avaliadas duas abordagens: (a) implementar \textit{logging} de auditoria diretamente em cada serviço; (b) centralizar num componente dedicado.
+
+\noindent\textbf{Decisão}: Criação do \texttt{AuditService} como componente \textbf{transversal}, invocado por todos os serviços de Application no momento de eventos relevantes (login, criação/anulação de venda, alteração de utilizador, etc.). O \texttt{AuditService} encapsula a política de retenção, formatação e armazenamento de \textit{logs}.
+
+\noindent\textbf{Consequências}: Vantagens --- política de auditoria centralizada e consistente; alterações à política aplicam-se a todos os serviços sem reescrita de código; facilita conformidade com RGPD e auditorias externas. Desvantagens aceites --- introduz uma dependência adicional em todos os serviços (mitigada por se tratar de uma chamada \textit{in-process} de baixa latência); risco de o \texttt{AuditService} se tornar um ponto de falha (mitigado por persistência assíncrona com \textit{buffer} local em memória).
+
+%--------------------------------------------------------------------------
+\subsection*{ADR-008 --- ORM: Entity Framework Core}
+%--------------------------------------------------------------------------
+
+\noindent\textbf{Estado}: Aceite.
+
+\noindent\textbf{Contexto}: O acesso à base de dados pode ser feito através de SQL puro (com Dapper ou ADO.NET) ou através de um ORM completo. O sistema tem cerca de 20 entidades de domínio com relações ricas, e a equipa privilegia velocidade de desenvolvimento sobre micro-otimização de \textit{queries}.
+
+\noindent\textbf{Decisão}: Utilização de \textbf{Entity Framework Core} como ORM principal, com migrações geridas via \textit{Code-First}. Para \textit{queries} de leitura intensiva (KPIs, relatórios), está prevista a utilização opcional de Dapper para contornar limitações de \textit{performance} do EF Core em \textit{queries} agregadoras complexas.
+
+\noindent\textbf{Consequências}: Vantagens --- alta produtividade em CRUD; migrações automatizadas e versionadas; LINQ permite \textit{queries} expressivas e \textit{type-safe}; mapeamento direto do diagrama de classes para entidades EF Core. Desvantagens aceites --- \textit{queries} complexas geradas pelo EF Core podem ser ineficientes (mitigado pelo uso seletivo de Dapper); \textit{learning curve} inicial para utilizadores menos experientes (mitigada por documentação interna e revisões de código).
+
+%--------------------------------------------------------------------------
+\subsection*{ADR-009 --- Conformidade Fiscal: Implementação Simplificada}
+%--------------------------------------------------------------------------
+
+\noindent\textbf{Estado}: Aceite.
+
+\noindent\textbf{Contexto}: A faturação em Portugal está sujeita à Portaria 363/2010 e legislação subsequente (incluindo Portaria 195/2020 sobre ATCUD), que exige \textit{software} certificado pela Autoridade Tributária para emissão de faturas a consumidor final. Os mecanismos técnicos previstos pela legislação --- numeração sequencial obrigatória, encadeamento criptográfico (\textit{hash chain}) RSA entre faturas, geração de ATCUD, geração de \textit{QR code} conforme especificação da AT, e exportação SAF-T(PT) --- são complexos e a sua implementação correta exigiria várias semanas-pessoa. A certificação efetiva está, em qualquer caso, fora do âmbito de um projeto académico.
+
+\noindent\textbf{Decisão}: Adoção de uma \textbf{implementação simplificada de faturação}, adequada à natureza académica do projeto. A tabela \texttt{Fatura} contém apenas os campos essenciais: \texttt{numero\_fiscal} (sequencial por loja e ano), \texttt{data\_emissao}, \texttt{cliente\_id} (\textit{foreign key} opcional para a entidade \texttt{Cliente} quando o consumidor solicita fatura com NIF), \texttt{total\_iva}, \texttt{total\_final}. A numeração sequencial é gerida por código aplicacional simples, sem tabela dedicada de séries. Todas as faturas exibem a menção ``\textbf{PROTÓTIPO ACADÉMICO --- SEM CONFORMIDADE FISCAL AT}'' no rodapé. Ficam explicitamente fora do âmbito: o encadeamento criptográfico, ATCUD, \textit{QR code}, exportação SAF-T(PT) e qualquer integração com o portal e-Fatura da AT.
+
+\noindent\textbf{Consequências}: Vantagens --- esforço de implementação reduzido em cerca de 4--5 dias-pessoa, libertando esses recursos para outras frentes da Etapa 3; estrutura de dados claramente identificada como protótipo, evitando o risco de uso indevido em produção; código focado nas competências centrais de Engenharia de \textit{Software} (POS, inventário, consolidação) em detrimento de complexidade fiscal específica de Portugal. Desvantagens aceites --- o sistema não pode ser usado em ambiente real; a evolução para sistema certificado exigiria uma reformulação substancial da tabela \texttt{Fatura} e a introdução de um módulo criptográfico dedicado, eventualmente com uma tabela \texttt{FaturaSerie} a ser adicionada nessa altura.
+
+%--------------------------------------------------------------------------
+\subsection*{ADR-010 --- Resiliência da Consolidação: Retentativas Automáticas}
+%--------------------------------------------------------------------------
+
+\noindent\textbf{Estado}: Aceite.
+
+\noindent\textbf{Contexto}: Embora a consolidação diária na topologia centralizada já não envolva transferência de rede, ainda pode falhar por causas locais à BD: \textit{timeouts}, \textit{deadlocks}, recursos saturados pela operação corrente. O RNF-07 exige resiliência da consolidação.
+
+\noindent\textbf{Decisão}: Implementação de uma estratégia de retentativa automática com \textit{backoff} fixo a \textbf{30, 60 e 90 minutos} após uma falha. Após 3 tentativas falhadas, o estado da consolidação é marcado como \texttt{Falha} e gera-se um alerta crítico para o Administrador IT (UC18 / RF18).
+
+\noindent\textbf{Consequências}: Vantagens --- robustez face a falhas transitórias sem necessidade de intervenção; o operador não é interrompido; o estado é totalmente rastreável (cada tentativa fica registada na entidade \texttt{ConsolidacaoDiaria}). Desvantagens aceites --- atraso máximo de 3 horas até alerta em caso de falha persistente (considerado aceitável dado que os dados originais estão sempre seguros na BD operacional).
+
+    \begin{tcolorbox}[title=Interação com o LLM]
+    \textbf{Prompt utilizado}
+
+    Atua como Arquiteto de \textit{Software} sénior. Com base na arquitetura definida (instância única centralizada, camadas, Blazor + .NET + SQL Server, JWT, REST), identifica as 8 a 10 decisões arquiteturais mais significativas e documenta-as no formato \textit{Architecture Decision Record} (Nygard): Estado, Contexto, Decisão, Consequências (vantagens e desvantagens aceites). Cada ADR deve ter entre 150 e 250 palavras.
+
+    \tcblower
+
+    \textbf{Análise crítica}
+
+    O LLM produziu uma primeira versão dos ADRs com qualidade desigual: ADRs estruturalmente corretos mas alguns demasiado genéricos (e.g., ``Estado: Aceite. Decisão: Usar boas práticas''). Foi necessário um \textit{prompt} de refinamento exigindo \textbf{trade-offs explícitos} e \textbf{alternativas avaliadas} em cada ADR. A versão final convergiu após 3 iterações, com a equipa a acrescentar manualmente as ADRs mais específicas do contexto (ADR-006 sobre reformulação da consolidação, ADR-009 sobre escolha de uma implementação simplificada de faturação face à legislação portuguesa), que o LLM dificilmente teria proposto sem conhecimento explícito da reformulação ocorrida e do compromisso pragmático adotado pela equipa. A força do LLM nesta tarefa foi a estruturação consistente do formato Nygard; a sua fraqueza foi a tendência para apresentar decisões como livres de \textit{trade-offs}, o que foi corrigido em revisão.
+    \end{tcolorbox}
+
+%==========================================================================
+\section{Proposta de Interface}
+\label{sec:ui}
+%==========================================================================
+
+    A proposta de interface foi desenhada como um conjunto de \textit{wireframes} de baixa fidelidade (estilo \textit{blueprint} monocromático), com o objetivo de documentar a estrutura, os fluxos e as decisões de UX dos ecrãs principais do sistema, sem prematuramente comprometer escolhas de design visual. Esta abordagem segue a recomendação de boas práticas de UX (Balsamiq, Nielsen Norman Group) que distingue claramente \textit{wireframes} (estrutura) de \textit{mockups} (estilo) e \textit{prototypes} (interação).
+
+    Foi selecionado um \textbf{conjunto representativo de seis ecrãs}, três da aplicação POS e três da aplicação \textit{Backoffice}, cobrindo os fluxos de maior impacto operacional (registo de venda, pagamento, fecho de caixa, \textit{dashboard} de gestão, gestão de catálogo e gestão de utilizadores). Os restantes ecrãs serão derivados destes padrões durante a Etapa~3 de implementação.
+
+    Os princípios de UX adotados foram:
+
+    \begin{itemize}
+        \item \textbf{POS otimizado para velocidade} --- alvos de toque com dimensão mínima de 60$\times$60 px adequados a uso por operadores em ritmo elevado; foco automático na caixa de pesquisa para receber \textit{input} do leitor de códigos de barras; cores semânticas constantes em todo o sistema (\textit{primary} = confirmar, \textit{danger} = cancelar); operação completa de venda em $\leq 4$ \textit{taps} (RNF-01, RNF-11);
+        \item \textbf{\textit{Backoffice} otimizado para clareza} --- navegação lateral persistente; filtros sempre visíveis no topo das listagens; \textit{master-detail} para edição de entidades; KPIs com indicação de variação face a período anterior; transparência sobre frescura dos dados (e.g., timestamp da última consolidação);
+        \item \textbf{Acessibilidade} --- contraste WCAG AA (4{,}5:1 mínimo) entre texto e fundo; informação de estado nunca dependente exclusivamente de cor (sempre acompanhada de texto ou ícone);
+        \item \textbf{Tornar regras de negócio visíveis} --- regras críticas (e.g., obrigatoriedade de justificação para diferenças de caixa $> 10$\,€, política de bloqueio após 5 tentativas falhadas) são apresentadas inline na UI, ajudando o utilizador a antecipar o comportamento do sistema.
+    \end{itemize}
+
+\subsection{POS --- Ecrã de Venda em Curso (UC01)}
+
+    O ecrã principal do POS (Figura~\ref{fig:wf-pos-venda}) divide-se em duas zonas: à esquerda, a lista de itens do carrinho com a caixa de pesquisa que mantém o foco automaticamente para receber \textit{input} do leitor de códigos de barras; à direita, o resumo dos totais (com IVA discriminado por taxa, conforme exigência fiscal) e os botões de ação. As promoções aplicadas aparecem como \textit{badge} \textit{inline} na linha de venda, fornecendo \textit{feedback} imediato ao operador.
+
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=\linewidth]{images/wf01_pos_venda_em_curso.png}
+        \caption{WF-01 --- POS: ecrã de venda em curso (UC01).}
+        \label{fig:wf-pos-venda}
+    \end{figure}
+
+\subsection{POS --- Ecrã de Pagamento (UC01)}
+
+    O ecrã de pagamento (Figura~\ref{fig:wf-pos-pagamento}) apresenta um \textit{layout} 50/50 onde a metade esquerda contém o resumo da venda (não-editável) e a metade direita contém a seleção de método de pagamento. O cálculo de troco é automático ao introduzir o valor recebido (numerário). O botão de confirmação ocupa a largura total da zona direita e está sempre visível, evitando \textit{clicks} acidentais nos métodos de pagamento.
+
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=\linewidth]{images/wf02_pos_pagamento.png}
+        \caption{WF-02 --- POS: ecrã de pagamento (UC01).}
+        \label{fig:wf-pos-pagamento}
+    \end{figure}
+
+\subsection{POS --- Fecho de Caixa (UC04)}
+
+    O ecrã de fecho de caixa (Figura~\ref{fig:wf-pos-fecho}) apresenta o resumo do dia à esquerda (gerado automaticamente a partir das vendas registadas) e a contagem física à direita (introduzida pelo operador). A diferença entre valor esperado e valor contado é calculada em tempo real e destacada conforme o sinal. Para diferenças superiores a 10\,€, o sistema exige a introdução de uma justificação (RN do UC04). Um aviso explícito informa o operador de que o fecho aciona a consolidação diária (UC12) e bloqueia o POS para novas vendas.
+
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=\linewidth]{images/wf03_pos_fecho_caixa.png}
+        \caption{WF-03 --- POS: fecho de caixa (UC04).}
+        \label{fig:wf-pos-fecho}
+    \end{figure}
+
+\subsection{\textit{Backoffice} --- \textit{Dashboard} de KPIs (UC13)}
+
+    O \textit{dashboard} (Figura~\ref{fig:wf-dashboard}) segue a convenção de "5--10 KPIs no topo, gráficos em baixo, comparativo entre lojas em rodapé". Os 4 KPIs de topo (total de vendas, transações, \textit{ticket} médio, alertas de \textit{stock}) apresentam variação percentual face ao período anterior. O gráfico de vendas por dia e o \textit{top} 5 produtos partilham uma linha; o comparativo entre lojas ocupa toda a largura abaixo, com \textit{badges} de alerta de \textit{stock} a usar cores semânticas (verde / amarelo / vermelho). O \textit{timestamp} da última consolidação está visível no topo, garantindo transparência sobre a frescura dos dados.
+
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=\linewidth]{images/wf04_dashboard_kpis.png}
+        \caption{WF-04 --- \textit{Backoffice}: \textit{dashboard} de KPIs (UC13).}
+        \label{fig:wf-dashboard}
+    \end{figure}
+
+\subsection{\textit{Backoffice} --- Gestão de Catálogo (UC05)}
+
+    A gestão de catálogo (Figura~\ref{fig:wf-catalogo}) adopta um \textit{layout} \textit{master-detail} de três colunas: navegação lateral, lista filtrável de produtos e painel de edição lateral. O histórico de preços é apresentado diretamente na ficha do produto, gerado automaticamente a cada alteração. A desativação de um produto é implementada como \textit{soft delete} (RN04 do UC05): o produto fica inativo mas mantém-se acessível para histórico e auditoria.
+
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=\linewidth]{images/wf05_gestao_catalogo.png}
+        \caption{WF-05 --- \textit{Backoffice}: gestão de catálogo de produtos (UC05).}
+        \label{fig:wf-catalogo}
+    \end{figure}
+
+\subsection{\textit{Backoffice} --- Gestão de Utilizadores (UC16)}
+
+    A gestão de utilizadores (Figura~\ref{fig:wf-utilizadores}) apresenta a lista filtrável por três dimensões críticas para auditoria (perfil, loja, estado). O estado de "Bloqueado" é tratado como uma condição reversível distinta de "Inativo", e as ações disponíveis em cada linha adaptam-se ao estado (um utilizador bloqueado mostra "Desbloquear" em vez de "Editar"). A política de segurança é exposta diretamente no ecrã, tornando explícitas para o administrador as regras que o sistema aplica automaticamente.
+
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=\linewidth]{images/wf06_gestao_utilizadores.png}
+        \caption{WF-06 --- \textit{Backoffice}: gestão de utilizadores (UC16).}
+        \label{fig:wf-utilizadores}
+    \end{figure}
+
+    \begin{tcolorbox}[title=Interação com o LLM]
+    \textbf{Prompt utilizado}
+
+    Atua como \textit{UX Designer}. A partir dos casos de uso UC01, UC04, UC05, UC13, UC16 e dos requisitos não-funcionais relevantes (RNF-01, RNF-11, RNF-12), define a estrutura e o conteúdo dos ecrãs principais do sistema Belo Mercado Manager. Para cada ecrã, identifica: zonas funcionais, elementos críticos, fluxo principal, regras de negócio que devem ser visíveis na UI. Justifica decisões de UX em função do perfil do utilizador (Operador de Caixa = velocidade; Administrador = visão consolidada).
+
+    \tcblower
+
+    \textbf{Análise crítica}
+
+    O LLM produziu propostas estruturalmente sensatas e bem fundamentadas em literatura de UX (referências espontâneas a Nielsen Norman, regras de Fitts, princípios de Tog). Foram, no entanto, necessárias várias correções: a primeira proposta do ecrã de venda apresentava o botão "Finalizar Venda" centrado e do mesmo tamanho que outros botões secundários, o que contraria a hierarquia visual desejada (foi reposicionado e sobredimensionado); o ecrã de fecho de caixa não previa inicialmente o aviso explícito sobre o trigger de consolidação, que foi acrescentado por sugestão da equipa por considerar que utilizadores menos experientes poderiam fechar a caixa sem perceber o impacto. A decisão deliberada de produzir \textit{wireframes} \textbf{monocromáticos de baixa fidelidade} foi tomada pela equipa contra a sugestão inicial do LLM (que propunha mockups coloridos com paletas predefinidas), por entender que num documento de planeamento académico o foco deve estar na estrutura e não no estilo visual.
+    \end{tcolorbox}
+
+%==========================================================================
+\section{Matriz de Rastreabilidade}
+\label{sec:rastreabilidade}
+%==========================================================================
+
+    A matriz de rastreabilidade documenta a ligação entre os requisitos identificados na Etapa~1 (RFs e RNFs) e os artefactos arquiteturais produzidos na Etapa~2 (casos de uso, componentes, classes do domínio e \textit{endpoints} de API). Esta rastreabilidade é fundamental para garantir cobertura --- nenhum requisito ficou sem suporte arquitetural --- e para apoiar futuras alterações, permitindo identificar rapidamente o impacto de uma mudança de requisito nos artefactos a rever.
+
+    A Tabela~\ref{tab:rastreabilidade-rf} apresenta a rastreabilidade dos 19 requisitos funcionais e a Tabela~\ref{tab:rastreabilidade-rnf} a dos 16 requisitos não-funcionais.
+
+\begin{table}[H]
+\centering\scriptsize
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{|p{0.7cm}|p{2.6cm}|p{0.6cm}|p{3.5cm}|p{2.8cm}|p{2.4cm}|}
+\hline
+\textbf{RF} & \textbf{Requisito} & \textbf{UC} & \textbf{Componentes} & \textbf{Classes} & \textbf{API} \\
+\hline
+RF01 & Registar Venda (POS) & UC01 & POSWebUI, SalesService, CatalogService, InventoryService, RelationalPersistence & Venda, LinhaVenda, Fatura, Cliente, Stock, Produto & POST /api/vendas \\
+\hline
+RF02 & Anular Venda e Devoluções & UC02 & POSWebUI, SalesService, InventoryService, AuditService & Venda, LinhaVenda, Stock & POST /api/vendas/\{id\}/anular, POST /api/vendas/\{id\}/devolucao \\
+\hline
+RF03 & Aplicar Promoções & UC03 & BackofficeWebUI, SalesService, CatalogService & Promocao, PromocaoLoja, LinhaVendaPromocao & GET/POST/PUT/DELETE /api/promocoes \\
+\hline
+RF04 & Abrir/Fechar Caixa & UC04 & POSWebUI, SalesService, ConsolidationScheduler, AuditService & CaixaDiaria, Venda & POST /api/caixas/abrir, POST /api/caixas/\{id\}/fechar \\
+\hline
+RF05 & Catálogo de Produtos & UC05 & BackofficeWebUI, CatalogService, RelationalPersistence & Produto, Categoria, Preco & GET/POST/PUT/DELETE /api/produtos, /api/categorias \\
+\hline
+RF06 & Monitorizar Stock & UC06 & BackofficeWebUI, InventoryService, RelationalPersistence & Stock, Produto, Loja & GET /api/stock, GET /api/stock/alertas \\
+\hline
+RF07 & Inventário Manual & UC07 & BackofficeWebUI, InventoryService, AuditService & Stock & POST /api/inventarios \\
+\hline
+RF08 & Sugestões de Reposição & UC08 & ReplenishmentScheduler, InventoryService, ProcurementService & Stock, Produto, Fornecedor & GET /api/sugestoes-reposicao \\
+\hline
+RF09 & Gerir Fornecedores & UC09 & BackofficeWebUI, ProcurementService, AuditService & Fornecedor & GET/POST/PUT /api/fornecedores \\
+\hline
+RF10 & Encomendas a Fornecedor & UC10 & BackofficeWebUI, ProcurementService, InventoryService, AuditService & Encomenda, LinhaEncomenda, Fornecedor & POST /api/encomendas, POST /api/encomendas/\{id\}/submeter \\
+\hline
+RF11 & Receção de Mercadoria & UC11 & BackofficeWebUI, ProcurementService, InventoryService & Encomenda, LinhaEncomenda, Stock & POST /api/encomendas/\{id\}/rececionar \\
+\hline
+RF12 & Consolidar Dados Diários & UC12 & ConsolidationScheduler, SalesService, InventoryService, ReportingService & ConsolidacaoDiaria, KPIDiario, RankingProdutosDiario & (job interno; sem endpoint público) \\
+\hline
+RF13 & \textit{Dashboard} de KPIs & UC13 & BackofficeWebUI, ReportingService & KPIDiario, RankingProdutosDiario & GET /api/dashboards/kpi \\
+\hline
+RF14 & Gerar e Exportar Relatórios & UC14 & BackofficeWebUI, ReportingService & Relatorio, KPIDiario & GET /api/relatorios, POST /api/relatorios/exportar \\
+\hline
+RF15 & Autenticar no Sistema & UC15 & WebUI, AuthAccessService, AuditService & Utilizador, Perfil, LogAuditoria & POST /api/auth/login, /refresh, /logout \\
+\hline
+RF16 & Gerir Utilizadores e Perfis & UC16 & BackofficeWebUI, AuthAccessService, AuditService & Utilizador, Perfil, Funcionario, GerenteDeLoja & GET/POST/PUT/DELETE /api/utilizadores \\
+\hline
+RF17 & Editar Perfil Próprio & UC17 & WebUI, AuthAccessService & Utilizador & GET/PUT /api/me, PUT /api/me/password \\
+\hline
+RF18 & Logs de Auditoria & UC18 & BackofficeWebUI, AuditService & LogAuditoria & GET /api/auditoria/logs \\
+\hline
+RF19 & Gerir Lojas da Cadeia & UC19 & BackofficeWebUI, StoreManagementService, AuditService & Cadeia, Loja, Funcionario & GET/POST/PUT /api/lojas \\
+\hline
+\end{tabular}
+\caption{Matriz de rastreabilidade --- requisitos funcionais.}
+\label{tab:rastreabilidade-rf}
+\end{table}
+
+\begin{table}[H]
+\centering\small
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{|p{1.5cm}|p{4.5cm}|p{8cm}|}
+\hline
+\textbf{RNF} & \textbf{Requisito} & \textbf{Realização Arquitetural} \\
+\hline
+RNF-01 & Registo de venda em $\leq 2$\,s & Otimização do fluxo POSWebUI $\leftrightarrow$ SalesService $\leftrightarrow$ BD; índices em \texttt{Stock(loja\_id, produto\_id)} e \texttt{Produto.ean13}; renderização Blazor em LAN. \\
+\hline
+RNF-02 & Consolidação $< 5$\,min & ConsolidationScheduler com \textit{queries} agregadoras otimizadas; tabelas \texttt{KPIDiario} / \texttt{RankingProdutosDiario} com índices únicos por loja+data. \\
+\hline
+RNF-03 & Relatórios $< 10$\,s & Pré-cálculo via \texttt{KPIDiario}; ReportingService consulta tabelas materializadas em vez de agregar do raw. \\
+\hline
+RNF-04 & Disponibilidade $\geq 99{,}5\%$ em horário de loja (07h00--23h00) & Topologia centralizada (ADR-001); SLA da infraestrutura central; monitorização contínua durante horário comercial. \\
+\hline
+RNF-05 & Disponibilidade $\geq 99\%$ em janela 24/7 & Mesma realização que o RNF-04, com janelas de manutenção planeadas fora do horário de loja; previsão de \textit{backups} (RNF-16). \\
+\hline
+RNF-06 & Integridade transacional ACID & Persistência transacional em \texttt{persistirVendaEFatura} (SD-UC01); EF Core 8 + SQL Server transactions; \textit{rollback} automático em falha. \\
+\hline
+RNF-07 & Resiliência da consolidação & ADR-010: retentativas a 30/60/90 min; estado em \texttt{ConsolidacaoDiaria}; alerta crítico após 3 falhas. \\
+\hline
+RNF-08 & \textit{Passwords} com bcrypt & AuthAccessService: \texttt{verificarHash} (SD-UC15); \texttt{Utilizador.password\_hash} VARCHAR(255). \\
+\hline
+RNF-09 & Comunicações HTTPS/TLS & Configuração ASP.NET Core; HSTS; TLS 1.2+ obrigatório no \textit{deployment}. \\
+\hline
+RNF-10 & Conformidade RGPD & AuditService transversal (ADR-007); \texttt{LogAuditoria} com retenção configurável; \texttt{Cliente.nif} com tratamento como dado pessoal. \\
+\hline
+RNF-11 & POS operável $< 1$\,h formação & Wireframes com alvos $\geq 60$\,px; foco automático para \textit{scanner}; cores semânticas constantes; teclas rápidas para itens sem código de barras. \\
+\hline
+RNF-12 & Interface responsiva (\textit{desktop}/\textit{tablet}) & Blazor Server com \textit{breakpoints} CSS; \textit{layouts} de grelha adaptativos. \\
+\hline
+RNF-13 & Suporte a 20 lojas & Topologia centralizada com \textit{database connection pooling}; índices em \texttt{loja\_id} em todas as tabelas operacionais. \\
+\hline
+RNF-14 & Padrões .NET, comentários XML & Convenção de equipa; \textit{linting} via .NET analyzers. \\
+\hline
+RNF-15 & Compatibilidade Chrome/Firefox/Edge & Blazor Server testado em \textit{evergreens}; sem dependências de APIs experimentais. \\
+\hline
+RNF-16 & \textit{Backups} automáticos diários & Política de \textit{backups} no SGBD (SQL Server \textit{Backup} agendado via SQL Server Agent ou \textit{Maintenance Plans}). \\
+\hline
+\end{tabular}
+\caption{Matriz de rastreabilidade --- requisitos não-funcionais.}
+\label{tab:rastreabilidade-rnf}
+\end{table}
+
+    \begin{tcolorbox}[title=Interação com o LLM]
+    \textbf{Prompt utilizado}
+
+    Atua como Engenheiro de \textit{Software} sénior. A partir dos requisitos funcionais (RF01--RF19), dos requisitos não-funcionais (RNF-01 a RNF-16), dos casos de uso, dos componentes definidos no diagrama de componentes, das classes do diagrama de classes e dos \textit{endpoints} REST especificados, produz uma matriz de rastreabilidade bidirecional. Para cada RF, identifica explicitamente os componentes, classes e \textit{endpoints} que o realizam. Para cada RNF, descreve em texto a forma como é endereçado pela arquitetura (não basta listar componentes, é preciso explicar a realização).
+
+    \tcblower
+
+    \textbf{Análise crítica}
+
+    A matriz produzida pelo LLM mostrou-se útil como ponto de partida, mas revelou três tipos de problemas comuns em saídas geradas por LLMs nesta tarefa: \textbf{(1) sobreposições incorretas}, com componentes a serem listados como realizadores de requisitos a que não pertencem; \textbf{(2) omissões}, com requisitos não-funcionais como o RNF-09 (HTTPS/TLS) que não tinham realização explícita identificada; \textbf{(3) descrições circulares}, em que a "realização arquitetural" se limitava a repetir o requisito por outras palavras. A revisão humana foi essencial em todas as linhas. A força do LLM foi assegurar cobertura sistemática (nenhum RF/RNF foi omitido); a fraqueza foi a profundidade analítica, que exigiu validação caso a caso.
+    \end{tcolorbox}
+
+%==========================================================================
+% FIM DO CAPÍTULO 4
+%==========================================================================

@@ -1,0 +1,95 @@
+@page "/"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using BeloMercado.BackofficeWeb.Auth
+@using Microsoft.AspNetCore.Components.Authorization
+@inject ApiAuthenticationStateProvider AuthState
+@inject AuthApiClient AuthApi
+@inject TokenStore Tokens
+@inject NavigationManager Nav
+
+<PageTitle>Backoffice — Belo Mercado</PageTitle>
+
+<div class="home">
+    <header class="home-header">
+        <h1>Belo Mercado — Backoffice</h1>
+        <AuthorizeView>
+            <Authorized>
+                <div class="user-block">
+                    <span class="user-email">@context.User.Identity?.Name</span>
+                    <a href="/perfil" class="btn btn-link">Perfil</a>
+                    <button class="btn btn-link" @onclick="LogoutAsync">Terminar sessão</button>
+                </div>
+            </Authorized>
+        </AuthorizeView>
+    </header>
+
+    <p class="lead">Escolhe uma área para começar.</p>
+
+    <div class="card-grid">
+        <a class="area-card" href="/dashboard">
+            <h3>Dashboard</h3>
+            <p>Vendas do dia, KPIs por loja, top produtos.</p>
+        </a>
+        <a class="area-card" href="/produtos">
+            <h3>Catálogo</h3>
+            <p>Produtos e categorias.</p>
+        </a>
+        <a class="area-card" href="/utilizadores">
+            <h3>Utilizadores</h3>
+            <p>Criar/editar/desativar contas, atribuir perfil e loja.</p>
+        </a>
+        <a class="area-card" href="/stock">
+            <h3>Stock</h3>
+            <p>Consultar quantidades por loja e alertas de mínimos.</p>
+        </a>
+        <a class="area-card" href="/promocoes">
+            <h3>Promoções</h3>
+            <p>Promoções globais ou por loja, percentagem ou preço fixo.</p>
+        </a>
+        <a class="area-card" href="/encomendas">
+            <h3>Encomendas</h3>
+            <p>Criar encomendas a fornecedores e rececionar mercadoria.</p>
+        </a>
+        <a class="area-card" href="/fornecedores">
+            <h3>Fornecedores</h3>
+            <p>Gerir fornecedores e produtos associados.</p>
+        </a>
+        <AuthorizeView Roles="AdminCadeia">
+            <Authorized>
+                <a class="area-card" href="/lojas">
+                    <h3>Lojas</h3>
+                    <p>Criar e gerir lojas da cadeia.</p>
+                </a>
+            </Authorized>
+        </AuthorizeView>
+    </div>
+</div>
+
+@code {
+    private async Task LogoutAsync()
+    {
+        var access = await Tokens.GetAccessTokenAsync();
+        var refresh = await Tokens.GetRefreshTokenAsync();
+        if (!string.IsNullOrEmpty(access) && !string.IsNullOrEmpty(refresh))
+        {
+            await AuthApi.LogoutAsync(access, refresh);
+        }
+        await AuthState.NotifyLogoutAsync();
+        Nav.NavigateTo("/login", forceLoad: false);
+    }
+}
+
+<style>
+    .home { max-width: 100%; margin: 32px 0; padding: 0 24px; }
+    .home-header { display: flex; justify-content: space-between; align-items: center; }
+    .user-block { display: flex; gap: 12px; align-items: center; font-size: 0.9rem; }
+    .btn-link { background: none; border: none; color: #1f4ea1; cursor: pointer; padding: 0; }
+    .lead { color: #555; }
+    .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-top: 24px; }
+    .area-card { padding: 20px; border: 1px solid #ddd; border-radius: 8px; background: #fff; text-decoration: none; color: inherit; display: block; transition: box-shadow 0.15s; }
+    a.area-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08); border-color: #1f4ea1; }
+    .area-card h3 { margin: 0 0 8px; color: #1f4ea1; }
+    .area-card p { color: #555; }
+    .area-card.disabled { opacity: 0.6; }
+    .area-card small { display: block; margin-top: 12px; color: #888; font-style: italic; }
+</style>

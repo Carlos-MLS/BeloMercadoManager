@@ -1,0 +1,324 @@
+@page "/stock"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "GerenteLoja,AdminCadeia")]
+@rendermode InteractiveServer
+@using BeloMercado.Application.Dtos.Stock
+@using BeloMercado.BackofficeWeb.Auth
+@inject StockApiClient StockApi
+
+<PageTitle>Stock — Belo Mercado</PageTitle>
+
+<div class="page">
+    <header class="page-header">
+        <h1>Stock</h1>
+        <a href="/" class="back-link">← Voltar</a>
+    </header>
+
+    @if (!string.IsNullOrEmpty(error))
+    {
+        <div class="alert alert-danger">@error</div>
+    }
+
+    @if (busy)
+    {
+        <p>A carregar...</p>
+    }
+    else
+    {
+        <section class="alertas">
+            <h2>
+                @if (alertas.Count == 0)
+                {
+                    <span>Sem alertas — todos os produtos acima do mínimo</span>
+                }
+                else
+                {
+                    <span>Alertas — @alertas.Count produto(s) abaixo do mínimo</span>
+                }
+            </h2>
+            @if (alertas.Count > 0)
+            {
+                <table class="compact">
+                    <thead>
+                        <tr>
+                            <th>Loja</th>
+                            <th>EAN</th>
+                            <th>Produto</th>
+                            <th class="num">Atual</th>
+                            <th class="num">Mín.</th>
+                            <th class="num">Falta para mín.</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var a in alertas.OrderBy(a => a.LojaDesignacao).ThenBy(a => a.ProdutoDescricao))
+                        {
+                            <tr class="alert-row">
+                                <td>@a.LojaDesignacao</td>
+                                <td><code>@a.ProdutoEan13</code></td>
+                                <td>@a.ProdutoDescricao</td>
+                                <td class="num">@a.Quantidade</td>
+                                <td class="num">@a.QtdMinima</td>
+                                <td class="num falta">@(a.QtdMinima - a.Quantidade)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </section>
+
+        <section class="todos">
+            <div class="todos-header">
+                <h2>Todos os produtos</h2>
+                <div class="filtros">
+                    <input type="search" placeholder="Filtrar por descrição ou EAN..." @bind="filtro" @bind:event="oninput" class="form-control" />
+                    @if (lojasDistinct.Count > 1)
+                    {
+                        <select @bind="lojaFiltro" class="form-control">
+                            <option value="">Todas as lojas</option>
+                            @foreach (var l in lojasDistinct)
+                            {
+                                <option value="@l.Id">@l.Designacao</option>
+                            }
+                        </select>
+                    }
+                    <label class="check">
+                        <input type="checkbox" @bind="apenasAbaixoMin" /> Só abaixo do mínimo
+                    </label>
+                </div>
+            </div>
+
+            @if (Filtrados().Count == 0)
+            {
+                <p class="empty">Sem stock para os filtros aplicados.</p>
+            }
+            else
+            {
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Loja</th>
+                            <th>EAN</th>
+                            <th>Produto</th>
+                            <th class="num">Quantidade</th>
+                            <th class="num">Mín.</th>
+                            <th class="num">Máx.</th>
+                            <th>Estado</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var s in Filtrados())
+                        {
+                            var isEditing = editandoId == s.Id;
+                            <tr class="@(s.AbaixoMinimo ? "alert-row" : "")">
+                                <td>@s.LojaDesignacao</td>
+                                <td><code>@s.ProdutoEan13</code></td>
+                                <td>@s.ProdutoDescricao</td>
+                                <td class="num"><strong>@s.Quantidade</strong></td>
+                                <td class="num">
+                                    @if (isEditing)
+                                    {
+                                        <input type="number" min="0" class="form-control inline"
+                                               @bind="editMin" />
+                                    }
+                                    else
+                                    {
+                                        @s.QtdMinima
+                                    }
+                                </td>
+                                <td class="num">
+                                    @if (isEditing)
+                                    {
+                                        <input type="number" min="0" class="form-control inline"
+                                               @bind="editMax" />
+                                    }
+                                    else
+                                    {
+                                        @s.QtdMaxima
+                                    }
+                                </td>
+                                <td>
+                                    @if (s.AbaixoMinimo)
+                                    {
+                                        <span class="badge badge-warn">Abaixo do mínimo</span>
+                                    }
+                                    else if (s.Quantidade >= s.QtdMaxima)
+                                    {
+                                        <span class="badge badge-info">No máximo</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge badge-ok">OK</span>
+                                    }
+                                </td>
+                                <td class="actions-cell">
+                                    @if (isEditing)
+                                    {
+                                        <button class="btn btn-link" @onclick="() => GuardarLimitesAsync(s)" disabled="@guardandoLimites">
+                                            @(guardandoLimites ? "..." : "Guardar")
+                                        </button>
+                                        <button class="btn btn-link btn-cancel" @onclick="CancelarEdicao">×</button>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn btn-link" @onclick="() => IniciarEdicao(s)">Editar mín/máx</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </section>
+    }
+</div>
+
+@code {
+    private record LojaTuple(Guid Id, string Designacao);
+
+    private List<StockResponse> stock = new();
+    private List<StockResponse> alertas = new();
+    private List<LojaTuple> lojasDistinct = new();
+
+    private string filtro = "";
+    private string lojaFiltro = "";
+    private bool apenasAbaixoMin;
+
+    private Guid? editandoId;
+    private int editMin;
+    private int editMax;
+    private bool guardandoLimites;
+
+    private bool busy = true;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var stockTask = StockApi.ListAsync();
+            var alertasTask = StockApi.ListAlertasAsync();
+            await Task.WhenAll(stockTask, alertasTask);
+            stock = stockTask.Result.ToList();
+            alertas = alertasTask.Result.ToList();
+            lojasDistinct = stock
+                .Select(s => new LojaTuple(s.LojaId, s.LojaDesignacao))
+                .DistinctBy(l => l.Id)
+                .OrderBy(l => l.Designacao)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            error = $"Erro ao carregar: {ex.Message}";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private void IniciarEdicao(StockResponse s)
+    {
+        editandoId = s.Id;
+        editMin = s.QtdMinima;
+        editMax = s.QtdMaxima;
+        error = null;
+    }
+
+    private void CancelarEdicao()
+    {
+        editandoId = null;
+    }
+
+    private async Task GuardarLimitesAsync(StockResponse s)
+    {
+        if (editMax < editMin)
+        {
+            error = "O máximo tem de ser maior ou igual ao mínimo.";
+            return;
+        }
+        guardandoLimites = true;
+        try
+        {
+            var result = await StockApi.UpdateLimitesAsync(s.Id, editMin, editMax);
+            if (result.Success && result.Value is not null)
+            {
+                // Atualiza a linha no estado local sem refrescar tudo
+                var idx = stock.FindIndex(x => x.Id == s.Id);
+                if (idx >= 0) stock[idx] = result.Value;
+                editandoId = null;
+            }
+            else
+            {
+                error = result.ErrorCode switch
+                {
+                    "STOCK_LIMITES_INVALIDOS" => "Limites inválidos (máximo tem de ser >= mínimo, ambos >= 0).",
+                    "STOCK_NAO_ENCONTRADO" => "Linha de stock não encontrada.",
+                    _ => $"Falha ao guardar (HTTP {result.StatusCode})."
+                };
+            }
+        }
+        finally
+        {
+            guardandoLimites = false;
+        }
+    }
+
+    private List<StockResponse> Filtrados()
+    {
+        IEnumerable<StockResponse> q = stock;
+
+        if (apenasAbaixoMin) q = q.Where(s => s.AbaixoMinimo);
+
+        if (!string.IsNullOrWhiteSpace(filtro))
+        {
+            var f = filtro.Trim();
+            q = q.Where(s =>
+                s.ProdutoDescricao.Contains(f, StringComparison.OrdinalIgnoreCase) ||
+                s.ProdutoEan13.Contains(f, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (Guid.TryParse(lojaFiltro, out var lid))
+        {
+            q = q.Where(s => s.LojaId == lid);
+        }
+
+        return q
+            .OrderBy(s => s.LojaDesignacao)
+            .ThenBy(s => s.ProdutoDescricao)
+            .ToList();
+    }
+}
+
+<style>
+    .page { max-width: 100%; margin: 24px 0; padding: 0 24px; }
+    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .back-link { color: #1f4ea1; text-decoration: none; }
+    .alert-danger { padding: 8px; background: #f8d7da; color: #842029; border-radius: 4px; margin-bottom: 12px; }
+    section { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-bottom: 24px; }
+    section h2 { margin-top: 0; font-size: 1.05rem; }
+    .alertas h2 { color: #664d03; }
+    .alertas { border-color: #ffe69c; background: #fff8e1; }
+    .todos-header { display: flex; justify-content: space-between; align-items: end; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; }
+    .filtros { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .form-control { padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9rem; }
+    .form-control.inline { padding: 2px 6px; width: 70px; text-align: right; font-size: 0.85rem; }
+    .actions-cell { white-space: nowrap; }
+    .btn { padding: 4px 8px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85rem; }
+    .btn-link { background: none; color: #1f4ea1; padding: 2px 6px; }
+    .btn-link.btn-cancel { color: #b02a37; font-weight: 600; }
+    .filtros input[type=search] { min-width: 220px; }
+    .check { display: flex; gap: 6px; align-items: center; font-size: 0.85rem; color: #555; }
+    table { width: 100%; border-collapse: collapse; }
+    table.compact th, table.compact td { padding: 6px 10px; }
+    th, td { padding: 8px 12px; border-bottom: 1px solid #eee; text-align: left; }
+    th { background: #f5f5f7; font-weight: 600; }
+    th.num, td.num { text-align: right; }
+    code { background: #f5f5f7; padding: 2px 6px; border-radius: 4px; font-size: 0.85rem; }
+    .alert-row { background: #fff5f5; }
+    .alert-row .falta { color: #b02a37; font-weight: 600; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; }
+    .badge-ok { background: #d1e7dd; color: #0f5132; }
+    .badge-warn { background: #f8d7da; color: #842029; }
+    .badge-info { background: #cfe2ff; color: #084298; }
+    .empty { color: #888; font-style: italic; }
+</style>

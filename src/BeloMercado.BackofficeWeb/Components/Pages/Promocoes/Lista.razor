@@ -1,0 +1,212 @@
+@page "/promocoes"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@rendermode InteractiveServer
+@using BeloMercado.Application.Dtos.Promocoes
+@using BeloMercado.Application.Dtos.Lojas
+@using BeloMercado.BackofficeWeb.Auth
+@using Microsoft.AspNetCore.Components.Authorization
+@inject PromocoesApiClient PromocoesApi
+@inject LojasApiClient LojasApi
+@inject ClockApiClient ClockApi
+@inject AuthenticationStateProvider AuthState
+
+<PageTitle>Promoções — Belo Mercado</PageTitle>
+
+<div class="page">
+    <header class="page-header">
+        <h1>Promoções</h1>
+        <div class="actions">
+            <a href="/" class="back-link">← Voltar</a>
+            @if (isAdmin)
+            {
+                <a href="/promocoes/nova" class="btn btn-primary">+ Nova promoção</a>
+            }
+        </div>
+    </header>
+
+    <div class="filters">
+        <label class="check">
+            <input type="checkbox" @bind="apenasAtivas" /> Só ativas
+        </label>
+        <label class="check">
+            <input type="checkbox" @bind="apenasVigentes" /> Só vigentes hoje
+        </label>
+    </div>
+
+    @if (!string.IsNullOrEmpty(error))
+    {
+        <div class="alert alert-danger">@error</div>
+    }
+    @if (!string.IsNullOrEmpty(info))
+    {
+        <div class="alert alert-info">@info</div>
+    }
+
+    @if (busy)
+    {
+        <p>A carregar...</p>
+    }
+    else if (Filtradas().Count == 0)
+    {
+        <p class="empty">Sem promoções para os filtros aplicados.</p>
+    }
+    else
+    {
+        <table>
+            <thead>
+                <tr>
+                    <th>Nome</th>
+                    <th>Produto</th>
+                    <th>Loja</th>
+                    <th>Tipo</th>
+                    <th class="num">Valor</th>
+                    <th>Vigência</th>
+                    <th>Estado</th>
+                    @if (isAdmin) { <th></th> }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var p in Filtradas())
+                {
+                    <tr class="@(p.Ativo ? "" : "row-inactive")">
+                        <td><strong>@p.Nome</strong></td>
+                        <td>
+                            @p.ProdutoDescricao
+                            <br /><small><code>@p.ProdutoEan13</code></small>
+                        </td>
+                        <td>@LojaNome(p.LojaId)</td>
+                        <td>@p.Tipo</td>
+                        <td class="num">
+                            @if (p.Tipo == "Percentagem") { @($"{p.Valor:N0}%") }
+                            else { @p.Valor.ToString("C", pt) }
+                        </td>
+                        <td>
+                            @p.DataInicio.ToString("yyyy-MM-dd")
+                            <br /><small>até @p.DataFim.ToString("yyyy-MM-dd")</small>
+                        </td>
+                        <td>
+                            <span class="badge @(p.Ativo ? "badge-ok" : "badge-off")">
+                                @(p.Ativo ? "Ativa" : "Inativa")
+                            </span>
+                            @if (Vigente(p)) { <span class="badge badge-info">Em vigor</span> }
+                            else if (p.DataFim < hoje && p.Ativo) { <span class="badge badge-warn">Expirada</span> }
+                        </td>
+                        @if (isAdmin)
+                        {
+                            <td class="actions-cell">
+                                <a href="@($"/promocoes/{p.Id}")" class="btn btn-link">Editar</a>
+                                @if (p.Ativo)
+                                {
+                                    <button class="btn btn-link btn-danger" @onclick="() => DeactivateAsync(p)">Desativar</button>
+                                }
+                            </td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@code {
+    private static readonly System.Globalization.CultureInfo pt =
+        System.Globalization.CultureInfo.GetCultureInfo("pt-PT");
+    private DateOnly hoje = DateOnly.FromDateTime(DateTime.Today);
+
+    private List<PromocaoResponse> promocoes = new();
+    private IReadOnlyList<LojaResponse> lojas = Array.Empty<LojaResponse>();
+    private bool apenasAtivas = true;
+    private bool apenasVigentes;
+    private bool busy = true;
+    private bool isAdmin;
+    private string? error;
+    private string? info;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthState.GetAuthenticationStateAsync();
+        isAdmin = state.User.IsInRole("AdminCadeia");
+        hoje = await ClockApi.GetTodayAsync();
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        busy = true;
+        error = null;
+        try
+        {
+            var promosTask = PromocoesApi.ListAsync();
+            var lojasTask = isAdmin ? LojasApi.ListAsync() : Task.FromResult<IReadOnlyList<LojaResponse>>(Array.Empty<LojaResponse>());
+            await Task.WhenAll(promosTask, lojasTask);
+            promocoes = promosTask.Result.OrderByDescending(p => p.DataInicio).ToList();
+            lojas = lojasTask.Result;
+        }
+        catch (Exception ex)
+        {
+            error = $"Erro ao carregar: {ex.Message}";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task DeactivateAsync(PromocaoResponse p)
+    {
+        info = null;
+        error = null;
+        var result = await PromocoesApi.DeactivateAsync(p.Id);
+        if (result.Success)
+        {
+            info = $"Promoção {p.Nome} desativada.";
+            await ReloadAsync();
+        }
+        else
+        {
+            error = $"Falha: {result.ErrorCode ?? result.StatusCode.ToString()}";
+        }
+    }
+
+    private List<PromocaoResponse> Filtradas()
+    {
+        IEnumerable<PromocaoResponse> q = promocoes;
+        if (apenasAtivas) q = q.Where(p => p.Ativo);
+        if (apenasVigentes) q = q.Where(Vigente);
+        return q.ToList();
+    }
+
+    private bool Vigente(PromocaoResponse p) => p.Ativo && p.DataInicio <= hoje && p.DataFim >= hoje;
+
+    private string LojaNome(Guid? id) =>
+        id is null ? "Todas" : (lojas.FirstOrDefault(l => l.Id == id)?.Designacao ?? id.Value.ToString()[..8]);
+}
+
+<style>
+    .page { max-width: 100%; margin: 24px 0; padding: 0 24px; }
+    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .actions { display: flex; gap: 16px; align-items: center; }
+    .back-link { color: #1f4ea1; text-decoration: none; }
+    .filters { display: flex; gap: 16px; align-items: center; margin-bottom: 16px; }
+    .check { display: flex; gap: 6px; align-items: center; font-size: 0.9rem; color: #555; }
+    .btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem; text-decoration: none; }
+    .btn-primary { background: #1f4ea1; color: white; }
+    .btn-link { background: none; color: #1f4ea1; padding: 4px 8px; }
+    .btn-danger { color: #b02a37; }
+    .alert-danger { padding: 8px; background: #f8d7da; color: #842029; border-radius: 4px; margin-bottom: 12px; }
+    .alert-info { padding: 8px; background: #cfe2ff; color: #084298; border-radius: 4px; margin-bottom: 12px; }
+    table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; }
+    th, td { padding: 10px 12px; border-bottom: 1px solid #eee; text-align: left; vertical-align: top; }
+    th { background: #f5f5f7; font-weight: 600; }
+    th.num, td.num { text-align: right; }
+    code { background: #f5f5f7; padding: 1px 4px; border-radius: 3px; font-size: 0.8rem; }
+    small { color: #888; }
+    .row-inactive { background: #fafafa; color: #888; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; margin-right: 4px; }
+    .badge-ok { background: #d1e7dd; color: #0f5132; }
+    .badge-off { background: #e9ecef; color: #495057; }
+    .badge-info { background: #cfe2ff; color: #084298; }
+    .badge-warn { background: #fff3cd; color: #664d03; }
+    .actions-cell { display: flex; gap: 4px; }
+    .empty { color: #888; font-style: italic; }
+</style>

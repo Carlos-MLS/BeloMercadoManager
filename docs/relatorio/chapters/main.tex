@@ -1,0 +1,848 @@
+\documentclass[a4paper,12pt]{scrreprt}
+\KOMAoptions{abstract=false}
+\usepackage{geometry}
+\usepackage[portuguese]{babel}
+\usepackage{fontspec}
+    \setmainfont{Arial}
+\usepackage{xcolor,colortbl}
+\usepackage{arydshln}
+\usepackage[intoc]{nomencl}
+    \makenomenclature
+\usepackage{graphicx}
+    \graphicspath{{images/}}
+\usepackage{hyperref}
+\usepackage{bookmark}
+    \hypersetup{
+        colorlinks,
+        citecolor=black,
+        filecolor=black,
+        linkcolor=black,
+        urlcolor=black
+    }
+\usepackage[some]{background}
+\usepackage{tikz}
+    \usetikzlibrary{calc}
+\usepackage{tcolorbox}
+\usepackage{enumitem}
+\usepackage{amsmath}
+\usepackage{eso-pic}
+\usepackage{float}
+\usepackage{adjustbox}
+
+\renewcommand{\familydefault}{\sfdefault}
+\input{cover}
+
+%==========================================================================
+% DOCUMENT
+%==========================================================================
+
+\begin{document}
+\setcounter{secnumdepth}{3}
+\setcounter{tocdepth}{3}
+
+\pagenumbering{gobble}
+\makecover
+
+\newgeometry{top=3cm,left=3cm,right=3cm,bottom=4cm}
+
+%==========================================================================
+% RESUMO
+%==========================================================================
+
+\renewenvironment{abstract}
+ {\par\noindent\textbf{\Large\abstractname}\par\bigskip}
+ {}
+
+\begin{flushleft}
+\begin{abstract}
+    O presente relatório documenta a totalidade do trabalho desenvolvido no projeto \textbf{Belo Mercado Manager}, um sistema de gestão integrada concebido para apoiar uma cadeia de retalho de proximidade composta por cinco lojas na zona norte de Portugal. O projeto foi conduzido ao longo de quatro etapas alinhadas com um ciclo de vida clássico de Engenharia de \textit{Software}: \textbf{engenharia de requisitos} (Etapa~1), \textbf{arquitetura e \textit{design}} (Etapa~2), \textbf{implementação} (Etapa~3) e \textbf{verificação, validação e avaliação da qualidade} (Etapa~4).
+
+    Em todas as fases foi feita utilização sistemática de \textit{Large Language Models} (LLM) como agentes de apoio, atuando como aceleradores de processo na eliciação de requisitos, na geração de código e de testes, e na revisão crítica de artefactos. A equipa manteve sempre o papel de definir o âmbito, validar as propostas do modelo e tomar as decisões de aceitação, num modelo de colaboração humano-IA com revisão humana final.
+
+    Como resultado, foram produzidos 19 requisitos funcionais, 16 requisitos não funcionais, 29 \textit{user stories} e 19 casos de uso (Etapa~1); uma arquitetura em camadas com instância única centralizada (Blazor/.NET, SQL~Server, JWT, API REST), com dez \textit{Architecture Decision Records}, diagramas de classes, sequência e componentes, modelo lógico de dados e seis \textit{wireframes} (Etapa~2); uma solução .NET~8 com seis projetos, 22 entidades de domínio, 10 serviços de aplicação, API REST e dois \textit{front-ends} Blazor Server cobrindo 15 dos 19 casos de uso (Etapa~3); e uma \textit{suite} de 165 testes automáticos com cobertura total dos requisitos funcionais em âmbito e uma avaliação ISO/IEC~25010 com nota média de 3,8 em 5 (Etapa~4).
+
+    \par \textbf{Área de Aplicação}: Engenharia de \textit{Software}; Sistemas de Informação para Gestão de Retalho.
+    \par \textbf{Palavras-Chave}: Gestão de Lojas de Conveniência, Engenharia de Requisitos, Casos de Uso, \textit{User Stories}, LLM, Blazor, .NET, Testes Automatizados, ISO/IEC~25010.
+\end{abstract}
+\end{flushleft}
+
+\pagebreak
+
+%==========================================================================
+% ÍNDICES
+%==========================================================================
+
+\renewcommand{\contentsname}{Índice}
+\tableofcontents
+\pagebreak
+
+\listoffigures
+\pagebreak
+
+\listoftables
+\pagebreak
+
+\pagenumbering{arabic}
+
+
+\input{chapters/chapter1_introducao}
+
+\input{chapters/chapter2_dominio}
+
+\input{chapters/chapter3_requisitos}
+
+\input{chapters/chapter4_arquitetura}
+
+\input{chapters/chapter5_implementacao}
+
+\input{chapters/chapter6_verificacao}
+
+\input{chapters/chapter7_conclusao}
+
+
+\input{chapters/referencias}
+
+
+
+%==========================================================================
+% LISTA DE SIGLAS E ACRÓNIMOS
+%==========================================================================
+
+\renewcommand{\nomname}{Lista de Siglas e Acrónimos}
+
+%% acronyms
+\nomenclature[00]{\hypertarget{sigla:acid}{\textbf{ACID}}}{\textit{Atomicity, Consistency, Isolation, Durability}}
+\nomenclature[01]{\hypertarget{sigla:adr}{\textbf{ADR}}}{\textit{Architecture Decision Record}}
+\nomenclature[02]{\hypertarget{sigla:api}{\textbf{API}}}{\textit{Application Programming Interface}}
+\nomenclature[03]{\hypertarget{sigla:bd}{\textbf{BD}}}{Base de Dados}
+\nomenclature[04]{\hypertarget{sigla:csv}{\textbf{CSV}}}{\textit{Comma-Separated Values}}
+\nomenclature[05]{\hypertarget{sigla:ean}{\textbf{EAN}}}{\textit{European Article Number}}
+\nomenclature[06]{\hypertarget{sigla:etl}{\textbf{ETL}}}{\textit{Extract, Transform, Load}}
+\nomenclature[07]{\hypertarget{sigla:https}{\textbf{HTTPS}}}{\textit{HyperText Transfer Protocol Secure}}
+\nomenclature[08]{\hypertarget{sigla:iva}{\textbf{IVA}}}{Imposto sobre o Valor Acrescentado}
+\nomenclature[09]{\hypertarget{sigla:jwt}{\textbf{JWT}}}{\textit{JSON Web Token}}
+\nomenclature[10]{\hypertarget{sigla:kpi}{\textbf{KPI}}}{\textit{Key Performance Indicator}}
+\nomenclature[11]{\hypertarget{sigla:lei}{\textbf{LEI}}}{Licenciatura em Engenharia Informática}
+\nomenclature[12]{\hypertarget{sigla:li4}{\textbf{LI4}}}{Laboratórios de Informática IV}
+\nomenclature[13]{\hypertarget{sigla:llm}{\textbf{LLM}}}{\textit{Large Language Model}}
+\nomenclature[14]{\hypertarget{sigla:nif}{\textbf{NIF}}}{Número de Identificação Fiscal}
+\nomenclature[15]{\hypertarget{sigla:pdf}{\textbf{PDF}}}{\textit{Portable Document Format}}
+\nomenclature[16]{\hypertarget{sigla:pos}{\textbf{POS}}}{\textit{Point of Sale}}
+\nomenclature[17]{\hypertarget{sigla:rgpd}{\textbf{RGPD}}}{Regulamento Geral sobre a Proteção de Dados}
+\nomenclature[18]{\hypertarget{sigla:srs}{\textbf{SRS}}}{\textit{Software Requirements Specification}}
+\nomenclature[19]{\hypertarget{sigla:tls}{\textbf{TLS}}}{\textit{Transport Layer Security}}
+\nomenclature[20]{\hypertarget{sigla:uc}{\textbf{UC}}}{Caso de Uso (\textit{Use Case})}
+\nomenclature[21]{\hypertarget{sigla:ui}{\textbf{UI}}}{\textit{User Interface}}
+\nomenclature[22]{\hypertarget{sigla:uml}{\textbf{UML}}}{\textit{Unified Modeling Language}}
+\nomenclature[23]{\hypertarget{sigla:ux}{\textbf{UX}}}{\textit{User Experience}}
+
+%% clickable commands for use in text
+\newcommand{\sigACID}{\hyperlink{sigla:acid}{ACID}}
+\newcommand{\sigADR}{\hyperlink{sigla:adr}{ADR}}
+\newcommand{\sigAPI}{\hyperlink{sigla:api}{API}}
+\newcommand{\sigBD}{\hyperlink{sigla:bd}{BD}}
+\newcommand{\sigCSV}{\hyperlink{sigla:csv}{CSV}}
+\newcommand{\sigEAN}{\hyperlink{sigla:ean}{EAN}}
+\newcommand{\sigETL}{\hyperlink{sigla:etl}{ETL}}
+\newcommand{\sigHTTPS}{\hyperlink{sigla:https}{HTTPS}}
+\newcommand{\sigIVA}{\hyperlink{sigla:iva}{IVA}}
+\newcommand{\sigJWT}{\hyperlink{sigla:jwt}{JWT}}
+\newcommand{\sigKPI}{\hyperlink{sigla:kpi}{KPI}}
+\newcommand{\sigLEI}{\hyperlink{sigla:lei}{LEI}}
+\newcommand{\sigLIIV}{\hyperlink{sigla:li4}{LI4}}
+\newcommand{\sigLLM}{\hyperlink{sigla:llm}{LLM}}
+\newcommand{\sigNIF}{\hyperlink{sigla:nif}{NIF}}
+\newcommand{\sigPDF}{\hyperlink{sigla:pdf}{PDF}}
+\newcommand{\sigPOS}{\hyperlink{sigla:pos}{POS}}
+\newcommand{\sigRGPD}{\hyperlink{sigla:rgpd}{RGPD}}
+\newcommand{\sigSRS}{\hyperlink{sigla:srs}{SRS}}
+\newcommand{\sigTLS}{\hyperlink{sigla:tls}{TLS}}
+\newcommand{\sigUC}{\hyperlink{sigla:uc}{UC}}
+\newcommand{\sigUI}{\hyperlink{sigla:ui}{UI}}
+\newcommand{\sigUML}{\hyperlink{sigla:uml}{UML}}
+\newcommand{\sigUX}{\hyperlink{sigla:ux}{UX}}
+
+\printnomenclature
+
+%==========================================================================
+% ANEXOS
+%==========================================================================
+
+\addchap{Anexos}
+
+\addsec{Anexo A --- Transcrição das Entrevistas Simuladas}
+
+As entrevistas simuladas com os \textit{stakeholders} do sistema Belo Mercado Manager foram conduzidas com recurso a \textit{Large Language Models} (LLM), atuando como apoio ao processo de Engenharia de Requisitos. Neste anexo são apresentadas as transcrições integrais das cinco entrevistas realizadas.
+
+\subsection*{Entrevista 1 --- Administrador da Cadeia (Sr. Manuel Correia)}
+\textbf{Data}: 15 de fevereiro de 2026\\
+\textbf{Local}: Escritório central da Belo Mercado, Braga\\
+\textbf{Entrevistador}: Analista da equipa de desenvolvimento\\
+\textbf{Entrevistado}: Sr. Manuel Correia --- Proprietário e administrador da cadeia Belo Mercado\\
+\textbf{Perfil}: 55 anos, formação em Gestão de Empresas, fundou a Belo Mercado há 8 anos
+
+\textbf{Analista}: Bom dia, Sr. Manuel. Muito obrigado pela sua disponibilidade. Como sabe, estamos a desenvolver um novo sistema de gestão para a sua cadeia de lojas. Gostaríamos de começar por compreender melhor a organização atual da Belo Mercado. Pode descrever-nos como está estruturada a cadeia?
+
+\textbf{Sr. Manuel}: Bom dia. Claro. A Belo Mercado tem neste momento cinco lojas, todas na zona norte. Comecei com uma loja em Braga há oito anos e fui expandindo. Cada loja tem um gerente responsável e dois a três operadores de caixa, dependendo do movimento. Eu supervisiono tudo a partir deste escritório em Braga, mas na prática passo muito tempo em deslocações entre lojas.
+
+\textbf{Analista}: E como funciona a gestão no dia a dia? Como é que acompanha o desempenho de cada loja?
+
+\textbf{Sr. Manuel}: Confesso que esse é o meu maior problema. Cada gerente gere a sua loja de forma relativamente autónoma. No final de cada mês, peço-lhes que me enviem um resumo das vendas. Alguns enviam em Excel, outros escrevem num email, e por vezes tenho de ir à loja pessoalmente para tirar informação da caixa registadora. Não consigo ter uma visão global do negócio de forma simples e atempada.
+
+\textbf{Analista}: Consegue identificar os maiores desafios ou frustrações com esta situação?
+
+\textbf{Sr. Manuel}: Vários. Primeiro, não sei em tempo útil como está cada loja. Se uma loja está a vender mal um mês inteiro, só descubro no final desse mês. Segundo, a gestão de stock é caótica --- já aconteceu termos um produto esgotado numa loja e excesso de stock dessa mesma referência noutra, sem que eu soubesse. Terceiro, com os fornecedores, cada gerente negoceia individualmente, e eu perco poder negocial porque não consigo agregar as encomendas.
+
+\textbf{Analista}: E em relação à faturação e aspetos financeiros?
+
+\textbf{Sr. Manuel}: A contabilidade é feita por um contabilista externo. Ele precisa dos dados de faturação de todas as lojas, e compilar isso mensalmente é um pesadelo. Há meses em que os dados chegam incompletos. Preciso que o sistema gere faturas de forma automática e que eu consiga exportar os dados financeiros facilmente.
+
+\textbf{Analista}: Que tipo de informação gostaria de ter sempre disponível?
+
+\textbf{Sr. Manuel}: Quero um painel --- um dashboard --- onde abro o computador de manhã e vejo: quanto vendeu cada loja ontem, quais os produtos mais vendidos, quais os que estão parados, qual a margem de lucro por loja e por categoria. Quero alertas quando o stock de qualquer produto em qualquer loja descer abaixo de um nível mínimo. Quero comparar lojas entre si. E quero relatórios que possa exportar para enviar ao contabilista.
+
+\textbf{Analista}: E no que respeita a segurança e controlo de acessos?
+
+\textbf{Sr. Manuel}: Sim, isso é importante. Eu devo ver tudo --- todas as lojas, todos os dados financeiros. Cada gerente deve ver apenas a informação da sua loja. Os operadores de caixa devem só poder registar vendas e nada mais. E o contabilista provavelmente precisa de acesso a relatórios financeiros, mas não aos dados operacionais.
+
+\textbf{Analista}: Por fim, há alguma funcionalidade específica que considere fundamental e que não tenhamos mencionado?
+
+\textbf{Sr. Manuel}: Sim. Quero que o sistema me permita perceber quais os produtos que devo descontinuar --- aqueles que vendem pouco mas ocupam espaço --- e quais os que devo apostar mais. Também gostaria de, no futuro, poder dar um programa de fidelização a clientes, mas isso pode ser para uma fase posterior.
+
+\subsection*{Entrevista 2 --- Gerente de Loja (D. Teresa Vieira)}
+\textbf{Data}: 16 de fevereiro de 2026\\
+\textbf{Local}: Loja Belo Mercado Braga\\
+\textbf{Entrevistador}: Analista da equipa de desenvolvimento\\
+\textbf{Entrevistada}: D. Teresa Vieira --- Gerente da loja Belo Mercado Braga\\
+\textbf{Perfil}: 38 anos, 12 anos de experiência em retalho, responsável pela loja há 4 anos
+
+\textbf{Analista}: Bom dia, D. Teresa. Obrigado por nos receber. Pode começar por nos descrever o seu dia típico na loja?
+
+\textbf{D. Teresa}: Bom dia. Claro. Chego à loja por volta das 7h30, meia hora antes da abertura. A primeira coisa que faço é uma ronda pelas prateleiras --- vejo o que está em falta, o que precisa de ser reposto do armazém e o que está a chegar ao prazo de validade. Depois abro a caixa, verifico o fundo de caixa e dou início ao dia.
+
+\textbf{Analista}: E ao longo do dia?
+
+\textbf{D. Teresa}: Ao longo do dia divido-me entre o atendimento (quando há mais movimento), a gestão de encomendas a fornecedores e a organização da loja. Quando chega uma encomenda de um fornecedor, confiro o que veio, verifico se bate com o que pedi e arrumo. Ao final do dia, fecho a caixa, faço a contagem do dinheiro em caixa, e preparo um resumo para enviar ao Sr. Manuel.
+
+\textbf{Analista}: Como gere atualmente o stock?
+
+\textbf{D. Teresa}: Tenho uma folha de Excel onde vou atualizando, mas confesso que nem sempre está em dia. Quando chega uma encomenda, anoto. Quando noto prateleiras vazias, vou ao Excel ver o que supostamente tenho em armazém. Mas o Excel não se atualiza sozinho com as vendas, por isso há sempre desfasamento. Algumas vezes mandei encomendar coisas que afinal já tinha, e outras vezes fiquei sem stock sem me aperceber a tempo.
+
+\textbf{Analista}: E como funciona o processo de encomenda aos fornecedores?
+
+\textbf{D. Teresa}: Normalmente faço por email ou por telefone. Tenho os contactos dos fornecedores habituais. Vejo o que está a faltar, preparo a lista e envio a encomenda. O problema é que nem sempre me lembro de tudo, e às vezes esqueço-me de encomendar algo que já está em falta há dias. Se o sistema me sugerisse automaticamente o que encomendar, seria uma grande ajuda.
+
+\textbf{Analista}: E em relação ao fecho de caixa e à consolidação de dados?
+
+\textbf{D. Teresa}: O fecho de caixa é feito manualmente. Conto o dinheiro, comparo com o que a caixa registadora diz que deveria estar lá, e anoto a diferença. Depois envio um resumo ao Sr. Manuel, normalmente por WhatsApp ou email. Se isso pudesse ser automático --- fecho a caixa no sistema e ele envia tudo --- seria perfeito.
+
+\textbf{Analista}: Que funcionalidades gostaria de ter num novo sistema?
+
+\textbf{D. Teresa}: Primeiro, quero saber em tempo real o que tenho em stock. Segundo, quero alertas automáticos --- ``atenção, o leite está abaixo do mínimo''. Terceiro, quero poder fazer encomendas ao fornecedor diretamente no sistema. Quarto, quero ver um resumo diário de vendas sem ter de fazer contas à mão. E quinto, que o envio de dados para o central seja automático, para eu não ter esse trabalho extra.
+
+\textbf{Analista}: Há mais alguma preocupação?
+
+\textbf{D. Teresa}: Sim. A interface tem de ser simples. Os meus operadores de caixa são miúdos jovens, estudantes, que estão ali umas horas por dia. Não posso andar a dar-lhes formação complicada. O sistema de venda tem de ser tão simples quanto possível: bipa o produto, aparece o preço, no fim clica ``pagar'' e sai a fatura.
+
+\subsection*{Entrevista 3 --- Operador de Caixa (João Martins)}
+\textbf{Data}: 16 de fevereiro de 2026\\
+\textbf{Local}: Loja Belo Mercado Guimarães\\
+\textbf{Entrevistador}: Analista da equipa de desenvolvimento\\
+\textbf{Entrevistado}: João Martins --- Operador de caixa\\
+\textbf{Perfil}: 22 anos, estudante de gestão, trabalha a tempo parcial (turnos de 4 horas)
+
+\textbf{Analista}: Olá, João. Pode descrever-me como funciona o processo de venda atualmente?
+
+\textbf{João}: Olá. É relativamente simples. O cliente chega com os produtos à caixa. Eu passo os artigos pelo leitor de código de barras, um a um. A caixa registadora vai somando. Quando acabo, digo o total ao cliente, ele paga --- normalmente em dinheiro ou multibanco --- e eu dou-lhe o troco e o talão.
+
+\textbf{Analista}: E quando algo não corre bem?
+
+\textbf{João}: O que acontece mais frequentemente é o leitor não conseguir ler o código de barras. Pode ser porque a etiqueta está danificada ou porque é um produto novo que ainda não está no sistema. Quando isso acontece, tenho de procurar o preço manualmente --- às vezes na etiqueta da prateleira, às vezes pergunto à D. Teresa. Isso atrasa tudo e os clientes ficam impacientes, especialmente se está fila.
+
+\textbf{Analista}: E quando um cliente pede fatura com NIF?
+
+\textbf{João}: Isso é uma dor de cabeça. Com o sistema atual, tenho de escrever à mão o NIF num formulário e depois a D. Teresa trata disso. Demora e é propenso a erros. Seria muito melhor se eu pudesse simplesmente digitar o NIF no sistema e a fatura sair automaticamente.
+
+\textbf{Analista}: E em relação a promoções e descontos?
+
+\textbf{João}: Quando há promoções, tenho de me lembrar quais são os produtos em promoção e aplicar o desconto manualmente. Às vezes esqueço-me e o cliente reclama. Se o sistema aplicasse automaticamente, seria muito mais fácil.
+
+\textbf{Analista}: Como funciona a abertura e o fecho de caixa?
+
+\textbf{João}: Logo do início do turno, conto o dinheiro que está na caixa (o fundo de caixa, que normalmente é 100€) e anoto num papel. No final do turno, conto novamente e deixo o papel para a gerente conferir. Às vezes há diferenças de um ou dois euros --- normalmente por erros no troco.
+
+\textbf{Analista}: O que gostaria que melhorasse num novo sistema?
+
+\textbf{João}: Rapidez, acima de tudo. Não quero perder tempo a procurar produtos quando o leitor falha --- quero poder pesquisar pelo nome. Quero que o NIF seja inserido no sistema e a fatura saia sozinha. Quero que os descontos sejam automáticos. E quero que o sistema seja fácil --- não quero ter de decorar 50 botões ou menus.
+
+\subsection*{Entrevista 4 --- Fornecedor (Distribuição Almeida, Lda.)}
+\textbf{Data}: 17 de fevereiro de 2026\\
+\textbf{Local}: Entrevista por videochamada\\
+\textbf{Entrevistador}: Analista da equipa de desenvolvimento\\
+\textbf{Entrevistado}: Sr. António Almeida --- Diretor Comercial, Distribuição Almeida, Lda.\\
+\textbf{Perfil}: Fornecedor de produtos de mercearia e bebidas, fornece à Belo Mercado há 5 anos
+
+\textbf{Analista}: Sr. António, pode descrever-nos como funciona atualmente o processo de encomendas com a Belo Mercado?
+
+\textbf{Sr. António}: Recebemos encomendas de cada loja individualmente, normalmente por email ou telefone. Cada gerente manda a sua lista quando precisa. Isso cria-nos alguns problemas: primeiro, recebemos encomendas pequenas espalhadas ao longo da semana, quando poderiam ser agrupadas numa encomenda maior. Segundo, nem sempre as encomendas chegam por escrito --- às vezes é uma chamada telefónica e há risco de mal-entendidos na quantidade ou no produto.
+
+\textbf{Analista}: E como funciona a entrega e a confirmação?
+
+\textbf{Sr. António}: Fazemos a entrega na loja e o gerente confere a mercadoria. Normalmente assina a guia de entrega. Mas depois, se houver algum problema --- um produto que veio a mais, a menos ou danificado --- a comunicação é informal e por vezes demorada. Não temos um sistema centralizado para gerir isso.
+
+\textbf{Analista}: O que o ajudaria a trabalhar melhor com a Belo Mercado?
+
+\textbf{Sr. António}: Se houvesse um sistema onde pudéssemos receber as encomendas de forma padronizada --- uma lista formal com códigos de produto, quantidades e preços acordados. Idealmente, eu poderia confirmar a encomenda no sistema, registar a data de entrega prevista e, quando entregar, o gerente confirma a receção. Assim fica tudo registado e não há mal-entendidos.
+
+\textbf{Analista}: E quanto a preços e condições?
+
+\textbf{Sr. António}: Os preços e condições são negociados anualmente com o Sr. Manuel, mas depois precisam de estar acessíveis no sistema para que as encomendas saiam com os valores corretos. Se eu atualizar um preço, gostaria que o sistema refletisse essa alteração. E se houver descontos de volume --- por exemplo, mais de 100 unidades com 5\% de desconto --- isso deveria ser aplicado automaticamente.
+
+\subsection*{Entrevista 5 --- Contabilista (Dr. Carlos Ferreira)}
+\textbf{Data}: 18 de fevereiro de 2026\\
+\textbf{Local}: Escritório do contabilista\\
+\textbf{Entrevistador}: Analista da equipa de desenvolvimento\\
+\textbf{Entrevistado}: Dr. Carlos Ferreira --- Contabilista responsável pela contabilidade da Belo Mercado\\
+\textbf{Perfil}: 48 anos, 20 anos de experiência em contabilidade de PMEs
+
+\textbf{Analista}: Dr. Carlos, como é que atualmente recebe os dados financeiros da Belo Mercado?
+
+\textbf{Dr. Carlos}: É um processo bastante penoso, devo dizer. No final de cada mês, o Sr. Manuel compila os dados que recebe dos gerentes --- faturas, recibos, despesas --- e envia-me tudo. Muitas vezes faltam documentos, ou os valores não batem certo com os talões. Perco muito tempo a reconciliar.
+
+\textbf{Analista}: Que tipo de dados precisa especificamente?
+
+\textbf{Dr. Carlos}: Preciso de todas as faturas e notas de crédito emitidas, organizadas por loja e por mês. Preciso dos dados de IVA --- quanto foi cobrado em cada taxa (6\%, 13\%, 23\%). Preciso dos dados de compras a fornecedores, com as respetivas faturas. E preciso de tudo isto em formato que eu possa importar para o meu software de contabilidade, idealmente CSV ou integração direta.
+
+\textbf{Analista}: Há requisitos legais que devamos ter em conta?
+
+\textbf{Dr. Carlos}: Sim, vários. As faturas devem cumprir os requisitos da Autoridade Tributária: número sequencial, NIF da empresa, data, descrição dos bens, valores com IVA discriminado. O software de faturação tem de ser certificado pela AT, se for usado para emitir faturas ao consumidor final. E os dados têm de ser guardados durante pelo menos 10 anos.
+
+\textbf{Analista}: Algo mais que o sistema deveria oferecer-lhe?
+
+\textbf{Dr. Carlos}: Um relatório mensal automático com o total de vendas por taxa de IVA, o total de compras a fornecedores e as margens por categoria. Se eu pudesse descarregar esse relatório em PDF no início de cada mês, poupava-me horas de trabalho.
+
+
+\addsec{Anexo B --- Casos de Uso Detalhados (UC02--UC19)}
+
+%--- UC02 ---
+\subsection*{UC02 --- Anular Venda e Processar Devolução}
+\begin{table}[H]
+\centering\small
+\begin{tabular}{|p{3cm}|p{11cm}|}
+\hline
+\textbf{ID / Nome} & UC02 --- Anular Venda e Processar Devolução \\
+\hline
+\textbf{Ator Principal} & Operador de Caixa / Gerente de Loja \\
+\hline
+\textbf{Descrição} & Anular uma venda finalizada ou processar devolução, atualizando \textit{stock} e gerando nota de crédito. \\
+\hline
+\textbf{Pré-condições} & 1) Utilizador autenticado (Operador/Gerente). 2) Venda com estado ``Concluída''. 3) Caixa aberta. \\
+\hline
+\textbf{Pós-condições} & 1) Venda marcada ``Anulada'' ou devolução registada. 2) \textit{Stock} incrementado. 3) Nota de crédito emitida. 4) Log de auditoria. \\
+\hline
+\textbf{Fluxo Principal} & 1. Selecionar ``Anulação/Devolução''. 2. Pesquisar venda (nº fatura/data). 3. Selecionar venda. 4. Escolher: anulação total ou devolução parcial. 5. Preencher motivo. 6. Confirmar → transação atómica: registo devolução, atualização \textit{stock}, nota de crédito, \textit{log}. \\
+\hline
+\textbf{Fluxos Alt.} & \textbf{7a.} Venda $> 24$\,h → requer autorização do Gerente. \textbf{9a.} Reimprimir nota de crédito. \\
+\hline
+\textbf{Exceções} & E1: Venda não encontrada. E2: Qtd devolvida $>$ vendida. E3: Venda já anulada. E4: Falha BD (\textit{rollback}). \\
+\hline
+\textbf{Regras de Negócio} & RN01: $> 24$\,h requer Gerente. RN02: $> 30$ dias não permitido. RN03: Notas crédito sequenciais (AT). \\
+\hline
+\textbf{RF Associados} & RF02, RNF-06 \\
+\hline
+\end{tabular}
+\caption{Caso de uso UC02 --- Anular Venda e Processar Devolução.}
+\end{table}
+
+%--- UC03 ---
+\subsection*{UC03 --- Aplicar Promoções e Descontos}
+\begin{table}[H]
+\centering\small
+\begin{tabular}{|p{3cm}|p{11cm}|}
+\hline
+\textbf{ID / Nome} & UC03 --- Aplicar Promoções e Descontos \\
+\hline
+\textbf{Ator Principal} & Administrador / Gerente de Loja \\
+\hline
+\textbf{Descrição} & Criar, editar e gerir promoções (percentagem, valor fixo, leve-N-pague-M) aplicadas automaticamente no POS. \\
+\hline
+\textbf{Pré-condições} & 1) Utilizador autenticado (Admin/Gerente). 2) Produtos ativos no catálogo. \\
+\hline
+\textbf{Pós-condições} & 1) Promoção criada/atualizada na BD. 2) Associações produto-promoção registadas. 3) Desconto automático em vendas futuras. \\
+\hline
+\textbf{Fluxo Principal} & 1. Aceder módulo ``Promoções''. 2. ``Nova Promoção''. 3. Preencher: descrição, tipo, valor, datas, abrangência (produto/categoria/global), lojas. 4. Guardar → validação e persistência. \\
+\hline
+\textbf{Fluxos Alt.} & \textbf{3a.} Editar promoção ativa/inativa. \textbf{3b.} Desativar promoção. \textbf{8a.} Conflito → aplica-se o maior desconto. \\
+\hline
+\textbf{Exceções} & E1: Data início no passado. E2: Data fim $<$ início. E3: Percentagem fora de intervalo. E4: Sem produto selecionado. \\
+\hline
+\textbf{Regras de Negócio} & RN01: Múltiplas promoções → maior desconto. RN02: Expiradas marcadas automaticamente. RN03: Gerente só na sua loja. RN04: Preço final $\geq 0$. \\
+\hline
+\textbf{RF Associados} & RF03, RNF-01 \\
+\hline
+\end{tabular}
+\caption{Caso de uso UC03 --- Aplicar Promoções e Descontos.}
+\end{table}
+
+%--- UC04 ---
+\subsection*{UC04 --- Abrir e Fechar Caixa}
+\begin{table}[H]
+\centering\small
+\begin{tabular}{|p{3cm}|p{11cm}|}
+\hline
+\textbf{ID / Nome} & UC04 --- Abrir e Fechar Caixa \\
+\hline
+\textbf{Ator Principal} & Operador de Caixa \\
+\hline
+\textbf{Descrição} & Registar abertura e fecho de caixa diários, contagem de numerário e preparação para consolidação. \\
+\hline
+\textbf{Pré-condições} & 1) Operador/Gerente autenticado. 2) (Abertura) Sem caixa aberta hoje. 3) (Fecho) Caixa aberta. \\
+\hline
+\textbf{Pós-condições} & 1) (Abertura) Registo \texttt{CaixaDiaria} com fundo de caixa. 2) (Fecho) Valor contado, diferença, estado ``Fechada'', flag consolidação. \\
+\hline
+\textbf{Fluxo Principal} & \textbf{Abertura:} 1. ``Abrir Caixa''. 2. Introduzir fundo de caixa (€). 3. POS desbloqueado. \textbf{Fecho:} 1. ``Fechar Caixa''. 2. Sistema calcula valor esperado. 3. Resumo do dia. 4. Introduzir valor contado. 5. Diferença calculada (confere/excedente/défice). 6. Confirmar → POS bloqueado, dados prontos para consolidação. \\
+\hline
+\textbf{Fluxos Alt.} & \textbf{2a.} Caixa já aberta → impede. \textbf{2b.} Vendas pendentes → finalizar primeiro. \textbf{6a.} Diferença $> 10$\,€ → justificação obrigatória. \\
+\hline
+\textbf{Exceções} & E1: Valor inválido. E2: Falha de persistência. \\
+\hline
+\textbf{Regras de Negócio} & RN01: 1 caixa/loja/dia. RN02: Sem vendas com caixa fechada. RN03: Fecho aciona consolidação (UC12). \\
+\hline
+\textbf{RF Associados} & RF04, RF12, RNF-06 \\
+\hline
+\end{tabular}
+\caption{Caso de uso UC04 --- Abrir e Fechar Caixa.}
+\end{table}
+
+%--- UC05 ---
+\subsection*{UC05 --- Gerir Catálogo de Produtos}
+\begin{table}[H]
+\centering\small
+\begin{tabular}{|p{3cm}|p{11cm}|}
+\hline
+\textbf{ID / Nome} & UC05 --- Gerir Catálogo de Produtos \\
+\hline
+\textbf{Ator Principal} & Administrador da Cadeia \\
+\hline
+\textbf{Descrição} & Manter o catálogo centralizado: adição, edição e desativação de produtos disponíveis para todas as lojas. \\
+\hline
+\textbf{Pré-condições} & 1) Administrador autenticado. \\
+\hline
+\textbf{Pós-condições} & 1) Produto criado/atualizado/desativado. 2) Disponível em todas as lojas. 3) Alterações de preço registadas em \texttt{HistoricoPrecos}. \\
+\hline
+\textbf{Fluxo Principal} & 1. Aceder ``Catálogo de Produtos''. 2. ``Novo Produto''. 3. Preencher: EAN-13, descrição, categoria/subcategoria, preço, IVA (6/13/23\%), unidade de medida, imagem (opcional). 4. Guardar → validação (EAN único, dígito controlo) e persistência. \\
+\hline
+\textbf{Fluxos Alt.} & \textbf{3a.} Editar produto (histórico de preços automático). \textbf{3b.} Desativar (aviso se \textit{stock} $> 0$). \textbf{3c.} Reativar. \\
+\hline
+\textbf{Exceções} & E1: EAN duplicado. E2: EAN inválido. E3: Preço inválido. E4: Imagem inválida. \\
+\hline
+\textbf{Regras de Negócio} & RN01: Catálogo centralizado (todas as lojas). RN02: Inativos não aparecem no POS. RN03: Histórico de preços obrigatório. RN04: \textit{Soft delete} apenas. \\
+\hline
+\textbf{RF Associados} & RF05 \\
+\hline
+\end{tabular}
+\caption{Caso de uso UC05 --- Gerir Catálogo de Produtos.}
+\end{table}
+
+%--- UC06 ---
+\subsection*{UC06 --- Consultar e Monitorizar \textit{Stock}}
+\begin{table}[H]
+\centering\small
+\begin{tabular}{|p{3cm}|p{11cm}|}
+\hline
+\textbf{ID / Nome} & UC06 --- Consultar e Monitorizar \textit{Stock} \\
+\hline
+\textbf{Ator Principal} & Gerente de Loja \\
+\hline
+\textbf{Descrição} & Consultar níveis de \textit{stock} por produto, alertas de \textit{stock} mínimo e histórico de movimentos. \\
+\hline
+\textbf{Pré-condições} & 1) Gerente autenticado. 2) Loja com produtos em \texttt{StockLoja}. \\
+\hline
+\textbf{Pós-condições} & 1) Informação de \textit{stock} apresentada. 2) Alertas marcados como ``Visualizados''. \\
+\hline
+\textbf{Fluxo Principal} & 1. Módulo ``Inventário''. 2. Tabela paginada: código, descrição, categoria, qtd atual, mín., máx., estado (cores). 3. Filtros: categoria, estado, pesquisa. 4. Separador ``Alertas'': produtos abaixo do mínimo. 5. ``Criar Encomenda'' → UC10 pré-preenchido. \\
+\hline
+\textbf{Fluxos Alt.} & \textbf{7a.} Contagem manual → UC07. \textbf{7b.} Histórico de movimentos de um produto. \\
+\hline
+\textbf{Exceções} & E1: Sem produtos para os filtros. \\
+\hline
+\textbf{Regras de Negócio} & RN01: Mín./máx. definidos por produto/loja. RN02: Alertas em tempo real. \\
+\hline
+\textbf{RF Associados} & RF06, RNF-01, RNF-03 \\
+\hline
+\end{tabular}
+\caption{Caso de uso UC06 --- Consultar e Monitorizar \textit{Stock}.}
+\end{table}
+
+%--- UC07 ---
+\subsection*{UC07 --- Realizar Inventário Manual}
+\begin{table}[H]
+\centering\small
+\begin{tabular}{|p{3cm}|p{11cm}|}
+\hline
+\textbf{ID / Nome} & UC07 --- Realizar Inventário Manual \\
+\hline
+\textbf{Ator Principal} & Gerente de Loja \\
+\hline
+\textbf{Descrição} & Contagem física de inventário, comparação com sistema, identificação de discrepâncias e ajuste de \textit{stock}. \\
+\hline
+\textbf{Pré-condições} & 1) Gerente autenticado. 2) Caixa fechada. 3) Produtos em \texttt{StockLoja}. \\
+\hline
+\textbf{Pós-condições} & 1) Contagem registada. 2) \textit{Stock} ajustado (se aceite). 3) Movimentos registados. 4) Discrepâncias $> 10$\% geram alerta ao Admin. \\
+\hline
+\textbf{Fluxo Principal} & 1. ``Nova Contagem''. 2. Verificar caixa fechada. 3. Lista de produtos com qtd sistema (readonly) e qtd contada (input). 4. ``Finalizar Contagem''. 5. Relatório de discrepâncias (excesso/quebra). 6. Aceitar ajuste ou recontar. \\
+\hline
+\textbf{Fluxos Alt.} & \textbf{5a.} Contagem parcial (guardar progresso). \textbf{6a.} Contagem por categoria. \\
+\hline
+\textbf{Exceções} & E1: Caixa aberta → impede. E2: Sessão expirada → retomar. E3: Valor inválido. \\
+\hline
+\textbf{Regras de Negócio} & RN01: Caixa deve estar fechada. RN02: Discrepâncias $> 10$\% alertam Admin. RN03: Histórico de contagens mantido. \\
+\hline
+\textbf{RF Associados} & RF07, RNF-06 \\
+\hline
+\end{tabular}
+\caption{Caso de uso UC07 --- Realizar Inventário Manual.}
+\end{table}
+
+%--- UC08 ---
+\subsection*{UC08 --- Gerar Sugestões de Reposição}
+\begin{table}[H]
+\centering\small
+\begin{tabular}{|p{3cm}|p{11cm}|}
+\hline
+\textbf{ID / Nome} & UC08 --- Gerar Sugestões de Reposição \\
+\hline
+\textbf{Ator Principal} & Sistema (automático) \\
+\hline
+\textbf{Descrição} & Análise de \textit{stock}, vendas e prazos de entrega para gerar sugestões automáticas de reposição. \\
+\hline
+\textbf{Pré-condições} & 1) Produtos com mín./máx. definidos. 2) Histórico de vendas ($\geq 7$ dias). 3) Fornecedores ativos com produtos. \\
+\hline
+\textbf{Pós-condições} & 1) Sugestões criadas em \texttt{SugestoesReposicao}. 2) Notificação ao Gerente. \\
+\hline
+\textbf{Fluxo Principal} & 1. Execução diária (06h00) ou manual. 2. Para cada produto/loja: calcular velocidade de vendas (30 dias), dias de \textit{stock}, ponto de encomenda. 3. Se qtd $\leq$ ponto de encomenda → gerar sugestão. 4. Prioridade: Alta (sem \textit{stock}), Média (abaixo mín.), Baixa (outros). 5. Gerente aprova/rejeita/ajusta → cria encomenda (UC10). \\
+\hline
+\textbf{Fluxos Alt.} & \textbf{1a.} Geração manual pelo Gerente. \textbf{8a.} Aprovação em lote (agrupa por fornecedor). \\
+\hline
+\textbf{Exceções} & E1: Sem dados históricos suficientes. E2: Produto sem fornecedor. \\
+\hline
+\textbf{Regras de Negócio} & RN01: Margem segurança = 2 dias (configurável). RN02: Apenas produtos ativos com mín. definido. RN03: Pendentes $> 7$ dias expiram. \\
+\hline
+\textbf{RF Associados} & RF08, RNF-01 \\
+\hline
+\end{tabular}
+\caption{Caso de uso UC08 --- Gerar Sugestões de Reposição.}
+\end{table}
+
+%--- UC09 ---
+\subsection*{UC09 --- Gerir Fornecedores}
+\begin{table}[H]
+\centering\small
+\begin{tabular}{|p{3cm}|p{11cm}|}
+\hline
+\textbf{ID / Nome} & UC09 --- Gerir Fornecedores \\
+\hline
+\textbf{Ator Principal} & Administrador da Cadeia \\
+\hline
+\textbf{Descrição} & Registar, editar e desativar fornecedores; associar produtos com preços de custo, descontos e prazos. \\
+\hline
+\textbf{Pré-condições} & 1) Administrador autenticado. \\
+\hline
+\textbf{Pós-condições} & 1) Fornecedor criado/atualizado/desativado. 2) Associações fornecedor-produto registadas. \\
+\hline
+\textbf{Fluxo Principal} & 1. Módulo ``Fornecedores''. 2. ``Novo Fornecedor''. 3. Preencher: nome, NIF (mod~11), morada, contacto, email, ramo, condições de pagamento. 4. Guardar → validação. 5. Associar produtos: preço de custo, desconto (\%), prazo de entrega (dias). \\
+\hline
+\textbf{Fluxos Alt.} & \textbf{3a.} Editar (NIF não editável). \textbf{3b.} Desativar (impede se encomendas pendentes). \textbf{9a.} Atualizar preço custo (histórico). \\
+\hline
+\textbf{Exceções} & E1: NIF duplicado. E2: NIF inválido. E3: Produto já associado. \\
+\hline
+\textbf{Regras de Negócio} & RN01: Inativos sem novas encomendas. RN02: Produto pode ter múltiplos fornecedores. RN03: \textit{Soft delete}. \\
+\hline
+\textbf{RF Associados} & RF09 \\
+\hline
+\end{tabular}
+\caption{Caso de uso UC09 --- Gerir Fornecedores.}
+\end{table}
+
+%--- UC10 ---
+\subsection*{UC10 --- Criar Encomenda a Fornecedor}
+\begin{table}[H]
+\centering\small
+\begin{tabular}{|p{3cm}|p{11cm}|}
+\hline
+\textbf{ID / Nome} & UC10 --- Criar Encomenda a Fornecedor \\
+\hline
+\textbf{Ator Principal} & Gerente de Loja \\
+\hline
+\textbf{Descrição} & Criar encomenda de reposição a um fornecedor, com base nas necessidades de \textit{stock}. \\
+\hline
+\textbf{Pré-condições} & 1) Gerente/Administrador autenticado. 2) Fornecedor ativo com produtos associados. \\
+\hline
+\textbf{Pós-condições} & 1) Encomenda registada (Rascunho ou Enviada). 2) Linhas com produto, qtd, preço, desconto. 3) Notificação ao fornecedor (se enviada). \\
+\hline
+\textbf{Fluxo Principal} & 1. ``Nova Encomenda''. 2. Selecionar fornecedor. 3. Catálogo do fornecedor com \textit{stock} atual e qtd sugerida. 4. Selecionar produtos e quantidades. 5. Total calculado. 6. ``Guardar Rascunho'' ou ``Enviar Encomenda''. \\
+\hline
+\textbf{Fluxos Alt.} & \textbf{1a.} Via alerta \textit{stock} (UC06, pré-preenchido). \textbf{1b.} Via sugestão reposição (UC08). \textbf{5a.} Encomenda centralizada (Admin, múltiplas lojas). \textbf{8a.} Editar rascunho. \\
+\hline
+\textbf{Exceções} & E1: Qtd inválida. E2: Sem produto selecionado. E3: Fornecedor sem catálogo. \\
+\hline
+\textbf{Regras de Negócio} & RN01: Preços da tabela \texttt{FornecedorProduto}. RN02: $> 5\,000$\,€ requer aprovação Admin. RN03: Qtd sugerida = máx $-$ atual. \\
+\hline
+\textbf{RF Associados} & RF06, RF08, RF09, RF10 \\
+\hline
+\end{tabular}
+\caption{Caso de uso UC10 --- Criar Encomenda a Fornecedor.}
+\end{table}
+
+%--- UC11 ---
+\subsection*{UC11 --- Registar Receção de Mercadoria}
+\begin{table}[H]
+\centering\small
+\begin{tabular}{|p{3cm}|p{11cm}|}
+\hline
+\textbf{ID / Nome} & UC11 --- Registar Receção de Mercadoria \\
+\hline
+\textbf{Ator Principal} & Gerente de Loja \\
+\hline
+\textbf{Descrição} & Registar a receção de produtos entregues por fornecedor, atualizando \textit{stock} e estado da encomenda. \\
+\hline
+\textbf{Pré-condições} & 1) Gerente autenticado. 2) Encomenda com estado ``Enviada'' ou ``Em Trânsito''. \\
+\hline
+\textbf{Pós-condições} & 1) \textit{Stock} incrementado. 2) Encomenda ``Recebida'' ou ``Recebida Parcialmente''. 3) Movimentos de \textit{stock} registados. 4) Discrepâncias registadas. \\
+\hline
+\textbf{Fluxo Principal} & 1. ``Encomendas Pendentes''. 2. Selecionar encomenda. 3. Detalhe: qtd encomendada (readonly) e qtd recebida (input). 4. Verificar fisicamente e ajustar. 5. ``Confirmar Receção''. 6. Sistema compara recebido/encomendado. 7. Atualiza \textit{stock} e regista movimentos. \\
+\hline
+\textbf{Fluxos Alt.} & \textbf{5a.} Entrega parcial (qtd parciais, encomenda fica pendente). \textbf{5b.} Produto danificado (observações). \\
+\hline
+\textbf{Exceções} & E1: Qtd recebida inválida. E2: Falha de persistência (\textit{rollback}). \\
+\hline
+\textbf{Regras de Negócio} & RN01: Atualiza custo médio se preço diferir. RN02: Discrepâncias $> 5$\% notificam Admin. \\
+\hline
+\textbf{RF Associados} & RF06, RF08, RF10, RF11 \\
+\hline
+\end{tabular}
+\caption{Caso de uso UC11 --- Registar Receção de Mercadoria.}
+\end{table}
+
+%--- UC12 ---
+\subsection*{UC12 --- Consolidar Dados Diários}
+\begin{table}[H]
+\centering\small
+\begin{tabular}{|p{3cm}|p{11cm}|}
+\hline
+\textbf{ID / Nome} & UC12 --- Consolidar Dados Diários \\
+\hline
+\textbf{Ator Principal} & Sistema (automático) \\
+\hline
+\textbf{Descrição} & Calcular e materializar agregados diários (vendas, movimentos de \textit{stock}, KPIs, \textit{rankings} de produtos) em tabelas de leitura denormalizadas, suportando o \textit{dashboard} de gestão e os relatórios analíticos. Reformulado na Etapa~2 para refletir a topologia centralizada (ver ADR-006). \\
+\hline
+\textbf{Pré-condições} & 1) Fecho de caixa realizado de pelo menos uma loja, ou \textit{cron} agendado das 23h30 ativado. 2) Dados operacionais do dia disponíveis na BD central. \\
+\hline
+\textbf{Pós-condições} & 1) Tabelas \texttt{KPIDiario} e \texttt{RankingProdutosDiario} atualizadas para a(s) loja(s) abrangida(s). 2) Registo \texttt{ConsolidacaoDiaria} criado com estado Sucesso/Falha. 3) Evento registado no \texttt{AuditService}. \\
+\hline
+\textbf{Fluxo Principal} & 1. \textit{Trigger}: fecho de caixa (UC04, propagado pelo SD-UC04) ou \textit{cron} 23h30. 2. \texttt{ConsolidationScheduler} identifica lojas com fecho concluído e agregação pendente. 3. \texttt{ConsolidationService} colabora com \texttt{SalesService}, \texttt{InventoryService} e \texttt{ReportingService} para calcular agregados (vendas por hora, \textit{ticket} médio, \textit{top} produtos, valor de \textit{stock}, alertas). 4. Resultados persistidos numa transação atómica nas tabelas materializadas. 5. Estado da consolidação marcado como ``Sucesso'' e evento de auditoria registado. \\
+\hline
+\textbf{Fluxos Alt.} & \textbf{1a.} Disparo manual por Administrador IT (\texttt{POST /api/admin/consolidacoes/disparar}). \textbf{3a.} Re-consolidação de dia anterior (sobrescreve agregados existentes para a mesma loja/data). \\
+\hline
+\textbf{Exceções} & E1: Falha de cálculo (\textit{timeout}, \textit{deadlock}, recurso saturado) → retentativa automática a 30, 60 e 90 min (ADR-010). Após 3 falhas, estado marcado como ``Falha'' e alerta crítico para o Administrador IT. E2: Inconsistência detetada (e.g., caixa não fechada que aparenta estar) → registado em \textit{log} e ignorado nesse ciclo. \\
+\hline
+\textbf{Regras de Negócio} & RN01: Uma consolidação por loja/dia (chave única \texttt{(loja\_id, data)} em \texttt{ConsolidacaoDiaria}). RN02: Os dados operacionais nunca são modificados nem apagados pela consolidação. RN03: A consolidação não bloqueia a operação POS nem a abertura de novas caixas. RN04: Tempo total $< 5$\,min (RNF-02). \\
+\hline
+\textbf{RF Associados} & RF12, RF13, RNF-02, RNF-06, RNF-07 \\
+\hline
+\end{tabular}
+\caption{Caso de uso UC12 --- Consolidar Dados Diários.}
+\end{table}
+
+%--- UC13 ---
+\subsection*{UC13 --- Consultar \textit{Dashboard} de KPIs}
+\begin{table}[H]
+\centering\small
+\begin{tabular}{|p{3cm}|p{11cm}|}
+\hline
+\textbf{ID / Nome} & UC13 --- Consultar \textit{Dashboard} de KPIs \\
+\hline
+\textbf{Ator Principal} & Administrador da Cadeia \\
+\hline
+\textbf{Descrição} & \textit{Dashboard} interativo com KPIs: vendas, \textit{ticket} médio, \textit{top} produtos, \textit{stock} em alerta, margem por categoria. \\
+\hline
+\textbf{Pré-condições} & 1) Utilizador autenticado (Admin/Gerente). 2) Dados consolidados existentes. \\
+\hline
+\textbf{Pós-condições} & 1) \textit{Dashboard} apresentado com KPIs atualizados. \\
+\hline
+\textbf{Fluxo Principal} & 1. ``Relatórios \& Dashboards''. 2. KPIs: total vendas, nº vendas, \textit{ticket} médio, \textit{top} 5 produtos, \textit{stock} em alerta, margem por categoria, gráfico 30 dias. 3. Filtro por período e loja. 4. \textit{Refresh} automático (60\,s). 5. \textit{Drill-down} em cada KPI. \\
+\hline
+\textbf{Fluxos Alt.} & \textbf{4a.} Gerente: filtrado automaticamente pela sua loja. \textbf{6a.} Gerar relatório → UC14. \\
+\hline
+\textbf{Exceções} & E1: Sem dados consolidados. E2: Erro de consulta. \\
+\hline
+\textbf{Regras de Negócio} & RN01: Gerentes veem só a sua loja. RN02: Admin vê todas. RN03: Dados da última consolidação bem-sucedida. \\
+\hline
+\textbf{RF Associados} & RF13, RNF-03 \\
+\hline
+\end{tabular}
+\caption{Caso de uso UC13 --- Consultar \textit{Dashboard} de KPIs.}
+\end{table}
+
+%--- UC14 ---
+\subsection*{UC14 --- Gerar e Exportar Relatórios}
+\begin{table}[H]
+\centering\small
+\begin{tabular}{|p{3cm}|p{11cm}|}
+\hline
+\textbf{ID / Nome} & UC14 --- Gerar e Exportar Relatórios \\
+\hline
+\textbf{Ator Principal} & Administrador da Cadeia \\
+\hline
+\textbf{Descrição} & Gerar relatórios analíticos (vendas, \textit{stock}, compras, financeiros) filtrados por loja/período/categoria, exportar em PDF/CSV. \\
+\hline
+\textbf{Pré-condições} & 1) Utilizador autenticado. 2) Dados consolidados. \\
+\hline
+\textbf{Pós-condições} & 1) Relatório gerado/exportado. 2) Acesso registado no \textit{log}. \\
+\hline
+\textbf{Fluxo Principal} & 1. Módulo ``Relatórios''. 2. Selecionar tipo (vendas/\textit{stock}/compras/financeiro). 3. Filtros: loja, período ($\leq 1$ ano), categoria. 4. ``Gerar Relatório'' → dados agregados apresentados. 5. ``Exportar'' → PDF ou CSV. \\
+\hline
+\textbf{Fluxos Alt.} & \textbf{6a.} Sem dados para filtros. \textbf{2a.} Relatório personalizado (colunas à escolha). \\
+\hline
+\textbf{Exceções} & E1: Datas inválidas. E2: Intervalo $> 365$ dias. E3: Erro na exportação. \\
+\hline
+\textbf{Regras de Negócio} & RN01: Gerentes só a sua loja. RN02: Financeiros só para Admin e Contabilista. RN03: \textit{Timestamp} e utilizador no relatório. \\
+\hline
+\textbf{RF Associados} & RF14, RNF-03 \\
+\hline
+\end{tabular}
+\caption{Caso de uso UC14 --- Gerar e Exportar Relatórios.}
+\end{table}
+
+%--- UC16 ---
+\subsection*{UC16 --- Gerir Utilizadores e Perfis}
+\begin{table}[H]
+\centering\small
+\begin{tabular}{|p{3cm}|p{11cm}|}
+\hline
+\textbf{ID / Nome} & UC16 --- Gerir Utilizadores e Perfis \\
+\hline
+\textbf{Ator Principal} & Administrador / Administrador IT \\
+\hline
+\textbf{Descrição} & Criar, editar e desativar contas, atribuir perfis (Admin, Gerente, Operador, IT) e associar a lojas. \\
+\hline
+\textbf{Pré-condições} & 1) Administrador/IT autenticado. \\
+\hline
+\textbf{Pós-condições} & 1) Utilizador criado/editado/desativado. 2) Associações loja registadas. 3) Credenciais enviadas por email. 4) \textit{Log} de auditoria. \\
+\hline
+\textbf{Fluxo Principal} & 1. ``Gestão de Utilizadores''. 2. ``Novo Utilizador''. 3. Preencher: nome, email (único), perfil, lojas. 4. Sistema gera \textit{password} temporária (12 caracteres, bcrypt). 5. Registo criado com \texttt{password\_temporaria=true}. 6. Email com credenciais enviado. \\
+\hline
+\textbf{Fluxos Alt.} & \textbf{3a.} Editar utilizador. \textbf{3b.} Desativar (\textit{soft delete}). \textbf{3c.} Reativar. \textbf{10a.} \textit{Reset} de \textit{password}. \\
+\hline
+\textbf{Exceções} & E1: Email duplicado. E2: Email inválido. E3: Falha no envio de email (utilizador criado, alerta manual). \\
+\hline
+\textbf{Regras de Negócio} & RN01: \textit{Soft delete} apenas. RN02: Máx. 1 Gerente ativo por loja. RN03: Admin tem acesso global. RN04: \textit{Password} temporária obrigatória no 1.º \textit{login}. \\
+\hline
+\textbf{RF Associados} & RF15, RF16, RF18, RNF-08, RNF-10 \\
+\hline
+\end{tabular}
+\caption{Caso de uso UC16 --- Gerir Utilizadores e Perfis.}
+\end{table}
+
+%--- UC17 ---
+\subsection*{UC17 --- Editar Perfil Próprio}
+\begin{table}[H]
+\centering\small
+\begin{tabular}{|p{3cm}|p{11cm}|}
+\hline
+\textbf{ID / Nome} & UC17 --- Editar Perfil Próprio \\
+\hline
+\textbf{Ator Principal} & Utilizador (qualquer perfil) \\
+\hline
+\textbf{Descrição} & Editar dados pessoais (nome, contacto, foto) e alterar \textit{password}. \\
+\hline
+\textbf{Pré-condições} & 1) Utilizador autenticado. \\
+\hline
+\textbf{Pós-condições} & 1) Dados atualizados em \texttt{Utilizadores}. 2) Se \textit{password} alterada: novo \textit{hash}, \texttt{password\_temporaria=false}. 3) \textit{Log} de auditoria. \\
+\hline
+\textbf{Fluxo Principal} & 1. ``O Meu Perfil''. 2. Formulário: nome (editável), email/perfil/lojas (readonly), contacto, foto. 3. Alterar e ``Guardar''. \\
+\hline
+\textbf{Fluxos Alt.} & \textbf{4a.} Alterar \textit{password}: atual + nova + confirmação (complexidade: 8 car., maiúscula, minúscula, dígito, símbolo). \textbf{4b.} 1.º \textit{login}: alteração obrigatória. \\
+\hline
+\textbf{Exceções} & E1: \textit{Password} atual incorreta. E2: Complexidade insuficiente. E3: Confirmação não coincide. E4: Imagem inválida. \\
+\hline
+\textbf{Regras de Negócio} & RN01: Não pode alterar próprio email/perfil. RN02: \textit{Password} temporária obrigatória. RN03: Nova $\neq$ últimas 3 \textit{passwords}. \\
+\hline
+\textbf{RF Associados} & RF17, RNF-08, RNF-10 \\
+\hline
+\end{tabular}
+\caption{Caso de uso UC17 --- Editar Perfil Próprio.}
+\end{table}
+
+%--- UC18 ---
+\subsection*{UC18 --- Consultar Logs de Auditoria}
+\begin{table}[H]
+\centering\small
+\begin{tabular}{|p{3cm}|p{11cm}|}
+\hline
+\textbf{ID / Nome} & UC18 --- Consultar Logs de Auditoria \\
+\hline
+\textbf{Ator Principal} & Administrador / Administrador IT \\
+\hline
+\textbf{Descrição} & Consultar registos de auditoria (logins, CRUD, alterações) para segurança, rastreabilidade e conformidade. \\
+\hline
+\textbf{Pré-condições} & 1) Administrador/IT autenticado. 2) Registos em \texttt{LogsAuditoria}. \\
+\hline
+\textbf{Pós-condições} & 1) \textit{Logs} apresentados conforme filtros. 2) Consulta registada no \textit{log} (rastreabilidade total). \\
+\hline
+\textbf{Fluxo Principal} & 1. ``Auditoria \& Segurança'' → ``Logs''. 2. Lista paginada (50/página, desc): Data/Hora, Utilizador, Ação, Detalhes, Loja, IP, Resultado. 3. Filtros: período, utilizador, tipo, loja, resultado. 4. Clicar → detalhe completo (JSON antes/depois). 5. Exportar CSV/PDF. \\
+\hline
+\textbf{Fluxos Alt.} & \textbf{3a.} Pesquisa por texto livre. \textbf{6a.} Exportação em PDF. \\
+\hline
+\textbf{Exceções} & E1: Sem registos para filtros. E2: Erro na exportação. \\
+\hline
+\textbf{Regras de Negócio} & RN01: \textit{Logs} imutáveis. RN02: Retenção mínima 5 anos. RN03: Acesso restrito a Admin. RN04: Consulta auto-registada. \\
+\hline
+\textbf{RF Associados} & RF18, RNF-06, RNF-09 \\
+\hline
+\end{tabular}
+\caption{Caso de uso UC18 --- Consultar Logs de Auditoria.}
+\end{table}
+
+%--- UC19 ---
+\subsection*{UC19 --- Gerir Lojas da Cadeia}
+\begin{table}[H]
+\centering\small
+\begin{tabular}{|p{3cm}|p{11cm}|}
+\hline
+\textbf{ID / Nome} & UC19 --- Gerir Lojas da Cadeia \\
+\hline
+\textbf{Ator Principal} & Administrador da Cadeia \\
+\hline
+\textbf{Descrição} & Registar, editar e desativar lojas; configurações operacionais (horários, \textit{stocks} por defeito, associação de utilizadores). \\
+\hline
+\textbf{Pré-condições} & 1) Administrador autenticado. \\
+\hline
+\textbf{Pós-condições} & 1) Loja criada/atualizada/desativada. 2) \texttt{ConfiguracoesLoja} registadas. 3) \texttt{StockLoja} inicializado (qtd=0). 4) \textit{Log} de auditoria. \\
+\hline
+\textbf{Fluxo Principal} & 1. ``Gestão de Lojas''. 2. ``Nova Loja''. 3. Preencher: designação, morada, código postal, contacto, email, horário, \textit{stock} mín./máx. por defeito. 4. Guardar → validação (designação única, máx. $>$ mín.). 5. \texttt{StockLoja} inicializado para todos os produtos ativos. 6. Associar utilizadores via UC16. \\
+\hline
+\textbf{Fluxos Alt.} & \textbf{3a.} Editar loja. \textbf{3b.} Desativar (impede se caixa aberta). \textbf{3c.} Reativar. \\
+\hline
+\textbf{Exceções} & E1: Designação duplicada. E2: Máx. $\leq$ mín. E3: Falha de persistência. \\
+\hline
+\textbf{Regras de Negócio} & RN01: Inativas mantêm dados históricos. RN02: \textit{Soft delete}. RN03: Mín. 1 Gerente antes de operar. \\
+\hline
+\textbf{RF Associados} & RF19, RNF-01 \\
+\hline
+\end{tabular}
+\caption{Caso de uso UC19 --- Gerir Lojas da Cadeia.}
+\end{table}
+
+\addsec{Anexo C --- Cronograma e Diagrama de Gantt}
+
+O cronograma completo do projeto, incluindo dependências e marcos de validação entre etapas, encontra-se representado no diagrama de Gantt produzido pela equipa. A atividade de preparação documental foi considerada desde o primeiro dia e decorreu em paralelo com as restantes atividades técnicas.
+
+\addsec{Anexo D --- Diagrama UML Geral de Casos de Uso}
+
+Neste anexo apresenta-se o diagrama UML geral de casos de uso do sistema Belo Mercado Manager, com os principais atores e respetivas interações com elevado nível de detalhe. Os casos de uso em formato expandido mantêm-se no Anexo~B.
+
+%==========================================================================
+% END DOCUMENT
+%==========================================================================
+\end{document}

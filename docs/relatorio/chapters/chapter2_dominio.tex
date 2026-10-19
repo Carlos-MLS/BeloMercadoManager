@@ -1,0 +1,312 @@
+%==========================================================================
+% CAPÍTULO 2 — DEFINIÇÃO DO DOMÍNIO DO SISTEMA
+%==========================================================================
+
+\chapter{Definição do domínio do sistema}
+
+%--------------------------------------------------------------------------
+\section{Contextualização}
+%--------------------------------------------------------------------------
+
+    Nos últimos anos, o retalho de proximidade em Portugal tem vindo a ganhar relevância, impulsionado por hábitos de consumo orientados para conveniência, rapidez e compras mais frequentes e de menor volume. Esta tendência intensificou-se durante o período pandémico, quando as restrições e a maior permanência em casa aumentaram a procura por lojas de bairro e formatos de proximidade, e manteve-se nos anos seguintes com a valorização de soluções de compra ``rápidas'' e acessíveis no quotidiano.
+
+    É neste enquadramento que surge a cadeia Belo Mercado, que após iniciar atividade em 2019 com uma primeira loja tem acompanhado a evolução do setor e a procura por soluções mais convenientes, expandindo gradualmente a operação, sendo atualmente composta por cinco lojas na zona norte de Portugal. A Belo Mercado foca-se em necessidades imediatas (alimentação, higiene, limpeza e artigos do dia-a-dia), frequentemente em zonas residenciais e de passagem, onde a disponibilidade do produto e a rapidez do atendimento têm impacto direto na experiência do cliente.
+
+    Com o aumento do número de lojas, torna-se especialmente relevante garantir mecanismos eficazes de coordenação e controlo entre pontos de venda geograficamente dispersos. Em particular, a operação passa a depender da capacidade de recolher e agregar diariamente a informação gerada em cada loja --- vendas, movimentos de \textit{stock} e entradas de mercadoria --- para que, ao final de cada dia, seja possível obter uma visão consolidada do desempenho da cadeia e suportar as decisões de gestão de forma consistente.
+
+    \begin{tcolorbox}[title=Interação com o LLM]
+    \textbf{Prompt utilizado}
+
+    Com base no documento ``CE01-Caso-de-Estudo-Mercearia`` que contém algum conteúdo e nomenclatura e formas de construir conteúdo que devemos seguir. Desta forma apresenta o enquadramento do caso de estudo sobre o retalho de proximidade em Portugal pós-pandemia. Apresenta a empresa `Belo Mercado' e descreve os seus desafios de gestão, focando na necessidade de consolidar dados diários de vendas e stocks para garantir o controlo e a coordenação da operação. De seguida, adiciona uma subsecção que estruture as fragilidades e os problemas atuais do negócio que fundamentam e justificam a adoção do sistema integrado.
+
+    \tcblower
+
+    \textbf{Análise crítica}
+
+    A resposta que o LLM gerou forneceu-nos uma boa base narrativa adequada para enquadrar o setor de retalho de proximidade e a evolução da cadeia Belo Mercado. Ainda assim, apresentava formulações demasiado gerais e algumas inferências que exigiram validação com o caso de estudo.
+
+    Na versão final, o texto foi ajustado para ter maior precisão e de forma a parecer um pouco mais realista, mais consistente a nível temporal e com maior foco no problema operacional, que era a necessidade de consolidação diária e coordenação entre as várias lojas.
+    \end{tcolorbox}
+
+%--------------------------------------------------------------------------
+\section{Apresentação do Caso de Estudo}
+%--------------------------------------------------------------------------
+
+    O Belo Mercado Manager é um sistema de \textit{software} concebido para apoiar a gestão integrada da cadeia `Belo Mercado'. O objetivo é assegurar que a informação operacional produzida em cada loja é recolhida, consolidada e disponibilizada de forma fiável ao nível central, permitindo ao administrador acompanhar o desempenho agregado e tomar decisões informadas, nomeadamente no que diz respeito ao controlo e reposição de inventário.
+
+    No dia-a-dia, cada loja atua de forma autónoma através de vendas, atendimento ao cliente e controlo do inventário local, com operadores de caixa e gerentes a assegurarem a execução operacional. No entanto, para manter uma visão única do negócio, é determinante que os dados relevantes sejam consolidados de forma consistente, garantindo a integridade da informação e reduzindo as discrepâncias entre lojas.
+
+    O desenvolvimento do Belo Mercado Manager deverá seguir boas práticas de Engenharia de \textit{Software} e Engenharia de Requisitos, com particular foco na clareza, consistência e rastreabilidade da informação ao longo do ciclo de desenvolvimento. Assim, o sistema pretende equilibrar autonomia operacional e controlo central, suportando uma visão global contínua que permita melhorar o controlo de inventário e a tomada de decisão em toda a cadeia.
+
+    \begin{tcolorbox}[title=Interação com o LLM]
+    \textbf{Prompt utilizado}
+
+    Escreve uma breve descrição do sistema de software, `Belo Mercado Manager', que servirá para a gestão centralizada da cadeia Belo Mercado. Foca-te em 3 planos principais, objetivo operacional, dinâmica local vs central e rigor técnico.
+
+    \tcblower
+
+    \textbf{Análise crítica}
+
+    O LLM, neste prompt, respondeu de forma coerente com o objetivo da secção, destacando a dinâmica local vs.
+    central e o papel do sistema proposto. No entanto, a proposta inicial fornecida era demasiado genérica em alguns pontos e não explicitava suficientemente o valor técnico da solução para suportar a rastreabilidade e consistência dos dados.
+
+    Sendo assim, fizemos uma revisão para reforçar a ligação entre a operação diária, a consolidação central e a tomada de decisão, preservando assim a clareza e objetividade do nosso caso de estudo. O resultado final ficou mais alinhado com o domínio de negócio e com a arquitetura funcional que descrevemos no relatório.
+    \end{tcolorbox}
+
+%--------------------------------------------------------------------------
+\section{Motivação e Objetivos}
+%--------------------------------------------------------------------------
+    A cadeia Belo Mercado opera atualmente com sistemas de registo heterogéneos: algumas lojas utilizam caixas registadoras simples sem integração digital, enquanto outras recorrem a folhas de cálculo Excel. Esta situação origina um conjunto de problemas operacionais relevantes que comprometem a eficiência e o controlo do negócio.
+
+    Em primeiro lugar, os registos manuais são suscetíveis a erros e omissões, levando à perda de informação no fecho diário. Em segundo lugar, a inexistência de um sistema integrado impede a realização de análises cruzadas entre lojas, dificultando a identificação de padrões de vendas e a avaliação global do desempenho da cadeia. Adicionalmente, a ausência de mecanismos automáticos de controlo de stock conduz frequentemente a ruturas, resultando em perdas de vendas e impacto negativo na satisfação dos clientes. Por fim, a falta de informação de faturação centralizada e estruturada dificulta a organização dos dados necessários ao cumprimento de obrigações fiscais e à análise rigorosa da situação financeira do negócio.
+    
+    Perante estes problemas, torna-se necessária a implementação de um sistema integrado que permita resolver estas fragilidades e suportar de forma eficaz a operação da cadeia. Nesse sentido, o sistema Belo Mercado Manager deverá cumprir os seguintes objetivos principais:
+
+    \begin{enumerate}
+    \item Permitir o \textbf{registo de vendas} em cada loja, com identificação de produtos, quantidades, preços e respetivo IVA.
+    \item Simular a emissão de \textbf{faturas} em modo protótipo académico, com cálculo de IVA e dados fiscais essenciais, sem certificação fiscal AT, conforme definido na ADR-009.
+    \item Manter o \textbf{catálogo de produtos} atualizado e partilhado entre todas as lojas, com suporte a categorias e subcategorias.
+    \item Gerir o \textbf{inventário} de cada loja de forma autónoma, com alertas automáticos de \textit{stock} mínimo.
+    \item Registar e gerir \textbf{fornecedores}, respetivos catálogos de preços e condições de fornecimento.
+    \item Permitir a criação e gestão de \textbf{encomendas} a fornecedores, com acompanhamento do estado da entrega.
+    \item Efetuar a \textbf{consolidação diária} dos dados de cada loja num sistema central.
+    \item Disponibilizar \textbf{relatórios e \textit{dashboards}} de gestão, com filtros por loja, período e categoria de produto.
+    \item Implementar \textbf{controlo de acessos} por perfil de utilizador (administrador, gerente, operador de caixa).
+    \item Garantir a \textbf{segurança dos dados}, incluindo encriptação, \textit{backups} e conformidade com o RGPD.
+    \end{enumerate}
+
+    \begin{tcolorbox}[title=Interação com o LLM]
+    \textbf{Prompt utilizado}
+
+    Faz uma análise detalhada da operação das lojas Belo Mercado. Descreve a diversidade de produtos e os desafios de gerir diferentes ritmos de reposição. Explica as consequências de não ter um sistema integrado e detalha como o `Belo Mercado Manager' deve funcionar para apoiar as vendas diárias, a gestão de catálogo comum e a consolidação de dados ao final do dia para o administrador. Por fim, apresenta uma lista enumerada dos 10 objetivos operacionais core do sistema para contornar estas fragilidades.
+
+    \tcblower
+
+    \textbf{Análise crítica}
+
+    A proposta do LLM cobriu bem o problema operacional e sugeriu até bons objetivos pertinentes, mas trouxe uma redundância textual e um tom excessivamente promocional em algumas passagens (algo que notamos não só neste ponto, mas ao longo de todo o projeto). Além disso, alguns objetivos estavam formulados de modo pouco verificável.
+
+    Na revisão, os objetivos foram consolidados em enunciados claros e orientados a resultado, mantendo assim um melhor encadeamento problema-resposta. O texto final foi simplificado para melhorar a legibilidade, reduzir ao máximo quaisquer repetições que possam existir e garantir a coerência com os requisitos funcionais e não funcionais definidos mais adiante.
+    \end{tcolorbox}
+
+%--------------------------------------------------------------------------
+\section{Análise de Contexto e Restrições}
+%--------------------------------------------------------------------------
+
+    A análise de contexto e restrições teve como finalidade compreender o ambiente operacional no qual o sistema será inserido e identificar as condicionantes --- técnicas, legais, operacionais e de projeto --- que enquadram e limitam as opções de conceção e desenvolvimento.
+
+    O contexto operacional foi caracterizado a partir das seguintes fontes: a descrição do caso de estudo, que define o modelo de negócio e a autonomia de cada loja; os resultados das entrevistas simuladas com os \textit{stakeholders} (ver Secção~\ref{sec:entrevistas} e Anexo~A), que revelaram os processos atuais, as dificuldades sentidas e as expectativas de cada perfil; e a investigação de legislação aplicável, nomeadamente o RGPD e os requisitos da Autoridade Tributária relativos a faturação eletrónica (Portaria n.º 363/2010).
+
+    \subsection{Contexto Operacional}
+    \begin{itemize}
+        \item Cada loja funciona de forma \textbf{autónoma} (tipicamente 07h00--23h00), com consolidação diária.
+        \item O sistema central agrega dados de \textbf{5 lojas} localizadas em diferentes cidades da zona norte de Portugal.
+        \item Os operadores de caixa necessitam de uma interface \textbf{rápida e intuitiva}, sem exigência de formação técnica especializada.
+    \end{itemize}
+
+    \subsection{Restrições Técnicas}
+    \begin{table}[H]
+    \centering
+    \begin{tabular}{|c|p{12cm}|}
+    \hline
+    \textbf{ID} & \textbf{Restrição} \\
+    \hline
+    RT01 & O sistema deve ser desenvolvido em .NET (Blazor). \\
+    \hline
+    RT02 & A base de dados deve ser relacional (SQL Server ou equivalente). \\
+    \hline
+    RT03 & O sistema deve funcionar em navegador web. \\
+    \hline
+    RT04 & A consolidação diária deve ser automatizada e resiliente a falhas. \\
+    \hline
+    \end{tabular}
+    \caption{Restrições técnicas.}
+    \label{tab:restricoes_tecnicas}
+    \end{table}
+
+    \textit{Nota:} a versão inicial deste levantamento incluía uma restrição adicional (RT05) que exigia operação \textit{offline} na loja com sincronização posterior ao sistema central. Após análise de \textit{trade-offs} documentada na ADR-001 (Secção~\ref{sec:adrs}), esta restrição foi removida com a adoção da topologia de instância única centralizada, passando o sistema a depender da disponibilidade da ligação à Internet em cada loja para a operação POS. Os requisitos de disponibilidade (RNF-04 e RNF-05) endereçam este risco.
+
+    \subsection{Restrições Legais e Regulamentares}
+    \begin{table}[H]
+    \centering
+    \begin{tabular}{|c|p{12cm}|}
+    \hline
+    \textbf{ID} & \textbf{Restrição} \\
+    \hline
+    RL01 & Cumprimento do RGPD no tratamento de dados pessoais. \\
+    \hline
+    RL02 & Reconhecimento dos requisitos da AT aplicáveis à faturação, ficando a certificação fiscal completa fora do âmbito do protótipo académico. \\
+    \hline
+    RL03 & Preservação de dados financeiros por mínimo de 10 anos. \\
+    \hline
+    \end{tabular}
+    \caption{Restrições legais e regulamentares.}
+    \label{tab:restricoes_legais}
+    \end{table}
+
+    \subsection{Restrições Operacionais}
+    \begin{table}[H]
+    \centering
+    \begin{tabular}{|c|p{12cm}|}
+    \hline
+    \textbf{ID} & \textbf{Restrição} \\
+    \hline
+    RO01 & Registo de venda em menos de 2 segundos. \\
+    \hline
+    RO02 & O sistema não deve exigir formação técnica especializada. \\
+    \hline
+    RO03 & Disponibilidade de 99,5\% durante o horário de funcionamento. \\
+    \hline
+    \end{tabular}
+    \caption{Restrições operacionais.}
+    \label{tab:restricoes_operacionais}
+    \end{table}
+
+    \subsection{Restrições de Projeto}
+    \begin{table}[H]
+    \centering
+    \begin{tabular}{|c|p{12cm}|}
+    \hline
+    \textbf{ID} & \textbf{Restrição} \\
+    \hline
+    RP01 & Equipa de 5 elementos. \\
+    \hline
+    RP02 & Duração total de 5 meses (fevereiro a junho de 2026). \\
+    \hline
+    RP03 & Metodologia sequencial e incremental, com 4 etapas definidas. \\
+    \hline
+    \end{tabular}
+    \caption{Restrições de projeto.}
+    \label{tab:restricoes_projeto}
+    \end{table}
+
+%--------------------------------------------------------------------------
+\section{Viabilidade}
+%--------------------------------------------------------------------------
+
+    Este projeto apresenta uma forte viabilidade assentando nos benefícios económicos e operacionais diretos que a implementação do sistema Belo Mercado Manager trará para a cadeia. Com a adoção de um sistema integrado centralizado, prevê-se que o negócio valide o investimento através das seguintes metas projetadas:
+
+\begin{itemize}
+    \item \textbf{Aumento em cerca de 20\% nas vendas}: Ao garantir alertas automáticos de níveis mínimos de \textit{stock} e otimizar o processo de reposição nas 5 lojas, a cadeia evita ruturas de produtos com elevada procura, convertendo antigas falhas de inventário em vendas efetivas.
+    \item \textbf{Redução drástica da perda de itens}: A introdução de um sistema rigoroso de controlo e validação (como o agendamento de inventários globais e parciais e a justificação obrigatória de quebras) prevê uma diminuição significativa no desperdício de bens (especialmente perecíveis e de validade curta).
+    \item \textbf{Otimização operacional dos recursos humanos}: A eliminação de procedimentos manuais assentes em papel e a consolidação automatizada de dados no final do dia permitirão realocar o tempo dos funcionários da frente de loja para um atendimento ao cliente mais ágil, melhorando a satisfação do consumidor.
+    \item \textbf{Maior poder de negociação e controlo de dados}: Com o cruzamento em tempo real dos dados de vendas por loja e a gestão global da cadeia, a Administração terá melhores indicadores para negociar com fornecedores e aplicar estratégias de descontos/promoções.
+\end{itemize}
+
+
+    \begin{tcolorbox}[title=Interação com o LLM]
+    \textbf{Prompt utilizado}
+
+    Atua como um Gestor de Projeto. Escreve a secção de `Viabilidade e Benefícios Esperados' para o sistema Belo Mercado Manager. O texto deve convencer os \textit{stakeholders} de que o investimento vale a pena, focando-se em: metas quantitativas, eficiência operacional, vantagem estratégica e escolha tecnológica. O tom deve ser persuasivo, demonstrando que o projeto tem um retorno tangível e é tecnicamente viável.
+
+    \tcblower
+
+    \textbf{Análise crítica}
+
+    O LLM produziu uma base útil para discutir a viabilidade e os benefícios esperados, com boa identificação de ganhos operacionais e estratégicos. Contudo, alguns valores apresentados surgiram como projeções otimistas sem explicitação de premissas (e.g. o aumento inicial de vendas em cerca de 75 \%)
+
+    O nosso grupo manteve os indicadores como metas projetadas e ajustou a linguagem para evitar afirmações não comprovadas nesta fase. O texto final ficou, então, com uma maior prudência técnica e um melhor enquadramento de risco.
+    \end{tcolorbox}
+
+%--------------------------------------------------------------------------
+\section{Recursos Materiais e Humanos}
+%--------------------------------------------------------------------------
+
+    Para o desenvolvimento do presente projeto foi necessário alocar um conjunto de recursos humanos adequados à natureza do trabalho. Em particular, o projeto conta com 5 elementos da equipa de desenvolvimento, responsáveis pelas várias atividades associadas à conceção, análise, especificação e desenvolvimento do sistema. A execução técnica é conduzida com supervisão de arquitetura e acompanhamento metodológico contínuo ao longo das diferentes etapas do projeto. Considera-se ainda que a validação do sistema exige contacto com os potenciais intervenientes do domínio, nomeadamente utilizadores e responsáveis pela gestão da cadeia de lojas, de forma a apoiar o levantamento e o refinamento dos requisitos.
+
+    No que diz respeito aos recursos materiais, foi necessário dispor de \textit{hardware} adequado, nomeadamente os computadores pessoais dos elementos da equipa. Ao nível de \textit{software}, recorreu-se a ferramentas de apoio técnico e documental como o Visual Studio Code, Overleaf (LaTeX), Visual Paradigm e Git/GitHub, essenciais para a programação, modelação, escrita do relatório e controlo de versões. Por fim, foi ainda utilizado o apoio de LLMs, enquanto recurso complementar ao processo de engenharia de requisitos, produção de documentação e estruturação do trabalho.
+
+    \begin{tcolorbox}[title=Interação com o LLM]
+    \textbf{Prompt utilizado}
+
+    Escreve uma secção de recursos para o projeto Belo Mercado Manager. Explica a composição da equipa técnica e as responsabilidades no ciclo completo, desde análise até implementação. Refere as ferramentas de trabalho (VS Code, Overleaf para LaTeX, Visual Paradigm e Git/GitHub) e inclui o uso de LLMs como apoio à estruturação documental e à engenharia de requisitos.
+
+    \tcblower
+
+    \textbf{Análise crítica}
+
+    A resposta do LLM apresentou corretamente a separação entre recursos humanos e materiais e incluiu corretamente as ferramentas que efetivamente seriam usadas no projeto. Ainda assim, alguns trechos estavam demasiado descritivos e incluíam pressupostos que exigiam refinamento para manter o rigor documental.
+
+    Na revisão final, foram mantidos apenas os elementos consistentes com o contexto real do nosso grupo, clarificando assim as responsabilidades e utilidade prática dos recursos. O resultado final ficou então mais conciso, verificável e adequado.
+    \end{tcolorbox}
+
+%--------------------------------------------------------------------------
+\subsection{Equipa de Trabalho e \textit{Stakeholders}}
+%--------------------------------------------------------------------------
+
+    \begin{table}[H]
+    \centering
+    \begin{tabular}{|l|c|l|}
+    \hline
+    \textbf{Nome} & \textbf{Número} & \textbf{Responsabilidades Principais} \\
+    \hline
+    Francisco Soares & 106882 & Coordenação, Eng. Requisitos, Arquitetura \\
+    \hline
+    Carlos Silva & 106792 & Base de Dados, \textit{Backend} \\
+    \hline
+    Nuno Soares & 107366 & \textit{Frontend} (Blazor), UI/UX \\
+    \hline
+    Diogo Silva & 97941 & API, Integração, Testes \\
+    \hline
+    Rodrigo Guimarães & 93236 & Documentação, Relatórios, QA \\
+    \hline
+    \end{tabular}
+    \caption{Equipa de trabalho e responsabilidades.}
+    \label{tab:equipa}
+    \end{table}
+
+    Os \textit{stakeholders} do sistema foram identificados e classificados em primários (utilizadores diretos do sistema) e secundários (partes afetadas indiretamente).
+
+    \begin{table}[H]
+    \centering
+    \small
+    \begin{tabular}{|>{\centering\arraybackslash}m{3.5cm}|>{\raggedright\arraybackslash}m{5cm}|>{\raggedright\arraybackslash}m{5.5cm}|}
+    \hline
+    \textbf{\textit{Stakeholder}} & \textbf{Descrição} & \textbf{Interesse no Sistema} \\
+    \hline
+    Administrador da Cadeia & Responsável pela gestão global da cadeia. & Relatórios consolidados, \textit{dashboards}, gestão de fornecedores. \\
+    \hline
+    Gerente de Loja & Responsável pela operação diária de uma loja. & Controlo de inventário, relatórios locais, gestão de reposição. \\
+    \hline
+    Operador de Caixa & Funcionário que realiza o registo de vendas. & Interface POS simples, registo de vendas, emissão de faturas. \\
+    \hline
+    Fornecedor & Responsável por repor o \textit{stock} de produtos. & Receção de encomendas, comunicação de preços. \\
+    \hline
+    Cliente & Pessoa que adquire produtos nas lojas. & Experiência de compra eficiente, emissão de fatura. \\
+    \hline
+    Contabilista & Profissional de contabilidade e fiscalidade. & Dados de faturação, relatórios financeiros. \\
+    \hline
+    Administrador IT & Responsável técnico pela manutenção do sistema. & Gestão de utilizadores, \textit{backups}, monitorização. \\
+    \hline
+    \end{tabular}
+    \caption{\textit{Stakeholders} do sistema (resumo).}
+    \label{tab:stakeholders_resumo}
+    \end{table}
+
+%--------------------------------------------------------------------------
+\section{Plano de Execução}
+%--------------------------------------------------------------------------
+
+O plano de execução foi definido por etapas sequenciais com marcos de validação, mantendo a documentação como atividade contínua desde o início do projeto. A síntese temporal encontra-se na Tabela~\ref{tab:timeline_execucao}, e o diagrama de Gantt detalhado encontra-se no Anexo~C.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{|c|c|p{8cm}|}
+\hline
+\textbf{Etapa} & \textbf{Período} & \textbf{Atividades Principais} \\
+\hline
+E1 & 09/02 -- 02/03 & Conceção, levantamento inicial, elicitação e estruturação documental. \\
+\hline
+E2 & 02/03 -- 23/03 & Arquitetura e \textit{design} da solução. \\
+\hline
+E3 & 23/03 -- 13/04 & Implementação incremental dos módulos prioritários. \\
+\hline
+E4 & 13/04 -- 11/05 & Verificação, validação e consolidação técnica/documental. \\
+\hline
+Encerramento & 26/05 -- 27/05 & Revisão final, empacotamento e entrega. \\
+\hline
+\end{tabular}
+\caption{Timeline de execução do projeto por etapas.}
+\label{tab:timeline_execucao}
+\end{table}

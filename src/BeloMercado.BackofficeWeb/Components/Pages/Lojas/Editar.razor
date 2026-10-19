@@ -1,0 +1,243 @@
+@page "/lojas/nova"
+@page "/lojas/{Id:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "AdminCadeia")]
+@rendermode InteractiveServer
+@using BeloMercado.Application.Dtos.Lojas
+@using BeloMercado.BackofficeWeb.Auth
+@inject LojasApiClient LojasApi
+@inject NavigationManager Nav
+
+<PageTitle>@(IsNew ? "Nova loja" : "Editar loja") — Belo Mercado</PageTitle>
+
+<div class="page">
+    <header class="page-header">
+        <h1>@(IsNew ? "Nova loja" : "Editar loja")</h1>
+        <a href="/lojas" class="back-link">← Voltar à lista</a>
+    </header>
+
+    @if (loading)
+    {
+        <p>A carregar...</p>
+    }
+    else
+    {
+        <EditForm Model="model" OnValidSubmit="OnSubmit" FormName="loja">
+            <DataAnnotationsValidator />
+
+            <div class="form-grid">
+                <div class="form-group form-wide">
+                    <label>Designação</label>
+                    <InputText @bind-Value="model.Designacao" class="form-control" />
+                    <ValidationMessage For="@(() => model.Designacao)" />
+                </div>
+
+                <div class="form-group form-wide">
+                    <label>Morada</label>
+                    <InputText @bind-Value="model.Morada" class="form-control" />
+                    <ValidationMessage For="@(() => model.Morada)" />
+                </div>
+
+                <div class="form-group">
+                    <label>Código postal</label>
+                    <InputText @bind-Value="model.CodigoPostal" class="form-control" placeholder="0000-000" />
+                    <ValidationMessage For="@(() => model.CodigoPostal)" />
+                </div>
+
+                <div class="form-group">
+                    <label>Contacto</label>
+                    <InputText @bind-Value="model.Contacto" class="form-control" />
+                    <ValidationMessage For="@(() => model.Contacto)" />
+                </div>
+
+                <div class="form-group form-wide">
+                    <label>Email</label>
+                    <InputText @bind-Value="model.Email" class="form-control" type="email" />
+                    <ValidationMessage For="@(() => model.Email)" />
+                </div>
+
+                <div class="form-group form-wide">
+                    <label>Horário (opcional)</label>
+                    <InputText @bind-Value="model.Horario" class="form-control" placeholder="Seg-Sex 9h-20h, Sáb 9h-13h" />
+                </div>
+
+                @if (!IsNew)
+                {
+                    <div class="form-group form-check form-wide">
+                        <label>
+                            <InputCheckbox @bind-Value="model.Ativo" /> Ativa
+                        </label>
+                    </div>
+                }
+            </div>
+
+            <p class="hint-block">
+                Os limites de stock (mínimo/máximo) são definidos por produto no separador <strong>Stock</strong>.
+                Os novos produtos arrancam com 5/100 que podes ajustar individualmente.
+            </p>
+
+            @if (!string.IsNullOrEmpty(error))
+            {
+                <div class="alert alert-danger">@error</div>
+            }
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary" disabled="@busy">
+                    @(busy ? "A guardar..." : (IsNew ? "Criar" : "Guardar"))
+                </button>
+                <a href="/lojas" class="btn btn-link">Cancelar</a>
+            </div>
+        </EditForm>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+
+    private bool IsNew => Id is null;
+
+    [SupplyParameterFromForm]
+    private FormModel model { get; set; } = new();
+
+    private bool loading = true;
+    private bool busy;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!IsNew)
+        {
+            var existing = (await LojasApi.ListAsync()).FirstOrDefault(l => l.Id == Id);
+            if (existing is null)
+            {
+                error = "Loja não encontrada.";
+            }
+            else
+            {
+                model.Designacao = existing.Designacao;
+                model.Morada = existing.Morada;
+                model.CodigoPostal = existing.CodigoPostal;
+                model.Contacto = existing.Contacto;
+                model.Email = existing.Email;
+                model.Horario = existing.Horario;
+                model.StockMinPorDefeito = existing.StockMinPorDefeito;
+                model.StockMaxPorDefeito = existing.StockMaxPorDefeito;
+                model.Ativo = existing.Ativo;
+            }
+        }
+        loading = false;
+    }
+
+    private async Task OnSubmit()
+    {
+        busy = true;
+        error = null;
+        try
+        {
+            if (IsNew)
+            {
+                var result = await LojasApi.CreateAsync(new CreateLojaRequest
+                {
+                    Designacao = model.Designacao,
+                    Morada = model.Morada,
+                    CodigoPostal = model.CodigoPostal,
+                    Contacto = model.Contacto,
+                    Email = model.Email,
+                    Horario = string.IsNullOrWhiteSpace(model.Horario) ? null : model.Horario,
+                    StockMinPorDefeito = model.StockMinPorDefeito,
+                    StockMaxPorDefeito = model.StockMaxPorDefeito
+                });
+                if (result.Success) Nav.NavigateTo("/lojas");
+                else error = MapError(result.ErrorCode, result.StatusCode);
+            }
+            else
+            {
+                var result = await LojasApi.UpdateAsync(Id!.Value, new UpdateLojaRequest
+                {
+                    Designacao = model.Designacao,
+                    Morada = model.Morada,
+                    CodigoPostal = model.CodigoPostal,
+                    Contacto = model.Contacto,
+                    Email = model.Email,
+                    Horario = string.IsNullOrWhiteSpace(model.Horario) ? null : model.Horario,
+                    StockMinPorDefeito = model.StockMinPorDefeito,
+                    StockMaxPorDefeito = model.StockMaxPorDefeito,
+                    Ativo = model.Ativo
+                });
+                if (result.Success) Nav.NavigateTo("/lojas");
+                else error = MapError(result.ErrorCode, result.StatusCode);
+            }
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private static string MapError(string? code, int status) => code switch
+    {
+        "DESIGNACAO_DUPLICADA" => "Já existe uma loja com esta designação.",
+        "EMAIL_DUPLICADO" => "Já existe uma loja com este email.",
+        "STOCK_INVALIDO" => "Stock máximo tem de ser maior que o mínimo.",
+        "LOJA_NAO_ENCONTRADA" => "Loja não encontrada.",
+        null => $"Erro {status}.",
+        _ => code
+    };
+
+    public class FormModel
+    {
+        [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.MaxLength(100)]
+        public string Designacao { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.MaxLength(255)]
+        public string Morada { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.MaxLength(16)]
+        public string CodigoPostal { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.MaxLength(32)]
+        public string Contacto { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.EmailAddress]
+        [System.ComponentModel.DataAnnotations.MaxLength(255)]
+        public string Email { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.MaxLength(255)]
+        public string? Horario { get; set; }
+
+        // Os defaults de stock por loja foram removidos da UI por confundirem
+        // os utilizadores (stock é por produto, não por loja). Mantemos os
+        // campos no modelo para satisfazer o contrato da API com valores
+        // sensatos por defeito (5 mínimo, 100 máximo). Quem precisar de
+        // ajustar limites fá-lo no separador Stock, produto a produto.
+        public int StockMinPorDefeito { get; set; } = 5;
+        public int StockMaxPorDefeito { get; set; } = 100;
+
+        public bool Ativo { get; set; } = true;
+    }
+}
+
+<style>
+    .page { max-width: 100%; margin: 24px 0; padding: 0 24px; }
+    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .back-link { color: #1f4ea1; text-decoration: none; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 20px; }
+    .form-group { display: flex; flex-direction: column; }
+    .form-group.form-wide { grid-column: 1 / -1; }
+    .form-group.form-check label { display: flex; gap: 8px; align-items: center; }
+    .form-group label { font-weight: 500; margin-bottom: 4px; }
+    .form-control { padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+    .hint-block { background: #eef3fb; border-left: 4px solid #1f4ea1;
+                  padding: 10px 14px; border-radius: 4px; margin: 16px 0 0;
+                  color: #333; font-size: 0.9rem; }
+    .hint-block strong { color: #1f4ea1; }
+    .form-actions { display: flex; gap: 12px; align-items: center; margin-top: 16px; }
+    .btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem; text-decoration: none; }
+    .btn-primary { background: #1f4ea1; color: white; }
+    .btn-link { background: none; color: #1f4ea1; }
+    .btn:disabled { opacity: 0.6; }
+    .alert-danger { padding: 8px; background: #f8d7da; color: #842029; border-radius: 4px; margin: 12px 0; }
+</style>

@@ -1,0 +1,123 @@
+@page "/caixa/{Id:guid}/vendas"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@rendermode InteractiveServer
+@using BeloMercado.Application.Dtos.Vendas
+@using BeloMercado.PosWeb.Auth
+@inject CaixasApiClient CaixasApi
+
+<PageTitle>Vendas do dia — Belo Mercado POS</PageTitle>
+
+<div class="page">
+    <header class="page-header">
+        <h1>Vendas desta caixa</h1>
+        <NavLink href="@($"/caixa/{Id}")" class="back-link">← Voltar à caixa</NavLink>
+    </header>
+
+    @if (busy)
+    {
+        <p>A carregar...</p>
+    }
+    else if (!string.IsNullOrEmpty(error))
+    {
+        <div class="alert alert-danger">@error</div>
+    }
+    else if (vendas.Count == 0)
+    {
+        <p class="empty">Sem vendas registadas nesta caixa ainda.</p>
+    }
+    else
+    {
+        <table>
+            <thead>
+                <tr>
+                    <th>Hora</th>
+                    <th>Fatura</th>
+                    <th>Pagamento</th>
+                    <th class="num">Total</th>
+                    <th>NIF</th>
+                    <th>Estado</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var v in vendas)
+                {
+                    <tr class="@RowClass(v)">
+                        <td>@v.DataHora.ToLocalTime().ToString("HH:mm:ss")</td>
+                        <td><code>@(v.FaturaNumero ?? "—")</code></td>
+                        <td>@v.MetodoPagamento</td>
+                        <td class="num">@v.Total.ToString("0.00") €</td>
+                        <td>@(string.IsNullOrEmpty(v.ClienteNif) ? "—" : v.ClienteNif)</td>
+                        <td>
+                            <span class="badge @EstadoBadge(v.Estado)">@v.Estado</span>
+                            @if (v.TemDevolucoes) { <span class="badge badge-warn">com devolução</span> }
+                        </td>
+                        <td>
+                            <NavLink href="@($"/venda/{v.Id}/anular")" class="btn-link">Anular/Devolver</NavLink>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        <div class="resumo">
+            <span>@vendas.Count venda(s) — total bruto: <strong>@vendas.Sum(v => v.Total).ToString("0.00") €</strong></span>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private List<VendaSummaryResponse> vendas = new();
+    private bool busy = true;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            vendas = (await CaixasApi.ListVendasAsync(Id)).ToList();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private static string EstadoBadge(string estado) => estado switch
+    {
+        "Concluida" => "badge-ok",
+        "Anulada" => "badge-off",
+        _ => "badge-gray"
+    };
+
+    private static string RowClass(VendaSummaryResponse v) =>
+        v.Estado == "Anulada" ? "row-cancelada" : "";
+}
+
+<style>
+    .page { max-width: 100%; margin: 24px 0; padding: 0 24px; }
+    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .back-link { color: #1f4ea1; text-decoration: none; }
+    .alert-danger { padding: 8px; background: #f8d7da; color: #842029; border-radius: 4px; margin-bottom: 12px; }
+    .empty { color: #888; font-style: italic; }
+    table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; }
+    th, td { padding: 10px 12px; border-bottom: 1px solid #eee; text-align: left; }
+    th { background: #f5f5f7; font-weight: 600; }
+    th.num, td.num { text-align: right; }
+    code { background: #f5f5f7; padding: 1px 4px; border-radius: 3px; font-size: 0.85rem; }
+    .row-cancelada { color: #888; text-decoration: line-through; }
+    .row-cancelada code { background: transparent; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; margin-right: 4px; }
+    .badge-ok { background: #d1e7dd; color: #0f5132; }
+    .badge-warn { background: #fff3cd; color: #664d03; }
+    .badge-off { background: #f8d7da; color: #842029; }
+    .badge-gray { background: #e2e3e5; color: #41464b; }
+    .btn-link { color: #1f4ea1; text-decoration: none; }
+    .resumo { margin-top: 16px; color: #555; }
+</style>

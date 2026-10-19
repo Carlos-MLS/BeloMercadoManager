@@ -1,0 +1,52 @@
+%==========================================================================
+% CAPÍTULO 1 — INTRODUÇÃO
+%==========================================================================
+
+\chapter{Introdução}
+
+    O presente relatório foi elaborado no âmbito da unidade curricular de Laboratórios de Informática IV e documenta o trabalho desenvolvido ao longo do projeto prático proposto. Este trabalho enquadra-se numa perspetiva atual da Engenharia de Software, em que o desenvolvimento de sistemas deixou de assentar apenas em processos tradicionais de análise, implementação e teste, passando também a integrar novas ferramentas de apoio à decisão, à produção técnica e à validação de soluções. Entre essas ferramentas, destacam-se os \textit{Large Language Models} (LLMs), cuja utilização tem vindo a ganhar relevância nas várias fases do ciclo de vida do \textit{software}.
+
+    No entanto, a utilização de LLMs neste contexto não foi encarada de forma meramente instrumental ou acrítica. Um dos aspetos centrais deste trabalho consistiu precisamente em reconhecer que o valor destas ferramentas depende da qualidade da sua utilização, da capacidade de interpretação dos resultados que produzem e da validação técnica realizada pelos próprios engenheiros de \textit{software}. Nesse sentido, o desenvolvimento do projeto implicou não só o recurso aos LLMs como apoio ao trabalho, mas também uma análise crítica do seu contributo, dos seus limites e dos riscos associados à sua utilização, nomeadamente ao nível da fiabilidade das respostas, da adequação das soluções sugeridas e da necessidade de mecanismos de governação, revisão e responsabilidade técnica.
+
+    \begin{tcolorbox}[title=Interação com o LLM]
+    \textbf{Prompt utilizado}
+
+    Com base no enunciado do trabalho prático, escreve uma introdução para o respetivo relatório. A resposta deve enquadrar o trabalho no contexto atual da Engenharia de Software e mencionar o papel que os Large Language Models (LLMs) irão tomar ao longo do projeto.
+
+    \tcblower
+
+    \textbf{Análise crítica}
+
+    A resposta gerada pelo LLM foi em geral alinhada com o contexto académico do relatório. O texto incluía corretamente a referência ao enquadramento da Engenharia de Software e ao papel dos LLMs no desenvolvimento do trabalho. Ainda assim, foram feitas algumas alterações com o objetivo de melhorar a sua adequação ao estilo pretendido para o relatório. Em particular, a resposta foi encurtada e simplificada em alguns pontos, de forma a torná-lo mais direto e natural, evitando respostas excessivamente densas.
+    \end{tcolorbox}
+
+%--------------------------------------------------------------------------
+\section{Apresentação do caso de estudo}
+%--------------------------------------------------------------------------
+
+O caso de estudo deste relatório corresponde à cadeia de retalho de proximidade \textbf{Belo Mercado}, composta por cinco lojas na zona norte de Portugal. O sistema proposto, \textbf{Belo Mercado Manager}, pretende suportar a operação diária de cada loja e a consolidação central de informação para apoio à decisão.
+
+Numa perspetiva funcional, o sistema cobre os processos nucleares de venda, inventário, fornecedores, encomendas e relatórios, assegurando rastreabilidade e consistência dos dados entre as várias lojas. A estrutura de dados de referência inclui entidades como \textit{Loja}, \textit{Produto}, \textit{Venda}, \textit{Stock}, \textit{Fornecedor}, \textit{Encomenda}, \textit{Cliente} e \textit{Utilizador}, que suportam os principais fluxos operacionais.
+
+%--------------------------------------------------------------------------
+\section{Motivação e Objetivos}
+%--------------------------------------------------------------------------
+
+A cadeia Belo Mercado opera atualmente com sistemas heterogéneos --- algumas lojas com caixas registadoras simples, outras com folhas de cálculo --- o que limita a visibilidade global do negócio, dificulta o controlo de inventário e torna penosa a consolidação de dados para reporte financeiro. Esta fragmentação cria fricção operacional crescente à medida que a cadeia se expande.
+
+O sistema \textbf{Belo Mercado Manager} visa endereçar estas limitações através da centralização da informação operacional, do suporte ao registo de vendas, da gestão integrada de inventário e fornecedores, e da disponibilização de indicadores fiáveis de gestão. A caracterização detalhada do problema, o conjunto completo de objetivos operacionais e a análise de contexto e restrições são apresentados no Capítulo~2.
+
+%--------------------------------------------------------------------------
+\section{Estrutura do relatório}
+%--------------------------------------------------------------------------
+    O presente relatório está organizado em sete capítulos, alinhados com as quatro etapas do projeto:
+
+\begin{itemize}
+    \item \textbf{Capítulo 1 -- Introdução}: apresenta o enquadramento geral do projeto, o caso de estudo, a motivação e os objetivos, e descreve a estrutura do relatório.
+    \item \textbf{Capítulo 2 -- Definição do Domínio do Sistema}: caracteriza o contexto de negócio da cadeia Belo Mercado, fundamenta a necessidade do sistema, apresenta os objetivos operacionais, analisa a viabilidade, descreve os \textit{stakeholders} e os recursos envolvidos e apresenta o plano de execução do projeto.
+    \item \textbf{Capítulo 3 -- Conceção e Engenharia de Requisitos Assistida por LLM} (Etapa 1): documenta o processo de engenharia de requisitos, incluindo os métodos de levantamento, as entrevistas com \textit{stakeholders}, as \textit{user stories}, os requisitos funcionais e não funcionais, a análise de ambiguidades e os casos de uso.
+    \item \textbf{Capítulo 4 -- Arquitetura e Design do \textit{Software} utilizando LLM} (Etapa 2): apresenta a visão geral da arquitetura, os modelos de classes, sequência e componentes, o modelo lógico de dados, a especificação da API REST, as decisões arquiteturais (ADRs), a proposta de interface e a matriz de rastreabilidade entre requisitos e artefactos.
+    \item \textbf{Capítulo 5 -- Implementação e Desenvolvimento por LLM} (Etapa 3): documenta a implementação incremental do sistema, incluindo a configuração do ambiente, a estratégia de blocos verticais por caso de uso, a geração de código assistida por LLM a partir das especificações das etapas anteriores, e o ciclo de revisão humana e correção pelo LLM.
+    \item \textbf{Capítulo 6 -- Verificação, Validação e Avaliação da Qualidade do \textit{Software} Produzido} (Etapa 4): apresenta a estratégia e os resultados de testes em três níveis (unitário, integração e sistema/aceitação), a geração assistida por LLM dos respetivos casos de teste, a verificação da satisfação do SRS através de matriz de rastreabilidade, a análise de cobertura de código e a avaliação do produto à luz da norma ISO/IEC~25010.
+    \item \textbf{Capítulo 7 -- Conclusões e Trabalho Futuro}: apresenta uma abordagem crítica ao trabalho realizado ao longo das quatro etapas, com identificação de aspetos positivos e negativos, e propõe linhas de orientação para a evolução futura do sistema.
+\end{itemize}

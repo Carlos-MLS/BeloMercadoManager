@@ -1,0 +1,563 @@
+%==========================================================================
+% CAPÍTULO 3 — CONCEÇÃO E ENGENHARIA DE REQUISITOS ASSISTIDA POR LLM
+%==========================================================================
+
+\chapter{Conceção e Engenharia de Requisitos Assistida por LLM}
+
+%--------------------------------------------------------------------------
+\section{Métodos de Levantamento de Requisitos}
+%--------------------------------------------------------------------------
+
+    O levantamento de requisitos recorreu a uma combinação de técnicas complementares, com o objetivo de recolher informação suficientemente abrangente e consistente para especificar o sistema:
+
+\begin{enumerate}
+    \item \textbf{Simulação de entrevistas com \textit{stakeholders}} --- Utilização de LLM para simular entrevistas com cada tipo de \textit{stakeholder}, cobrindo os seus processos atuais, dificuldades e expectativas (ver Secção~\ref{sec:entrevistas} e Anexo~A).
+    \item \textbf{Análise de domínio} --- Estudo do caso de estudo CE01 (Mercearia) como referência metodológica e de escala para o contexto de negócio.
+    \item \textbf{\textit{Brainstorming} assistido por LLM} --- Geração e refinamento iterativo de requisitos a partir dos cenários identificados.
+    \item \textbf{Análise de sistemas semelhantes} --- Estudo de sistemas POS e ERP do setor de retalho de proximidade.
+    \item \textbf{Refinamento iterativo} --- Revisão e eliminação de ambiguidades com apoio de LLM (ver Secção~\ref{sec:ambiguidades}).
+\end{enumerate}
+
+%--------------------------------------------------------------------------
+\section{Elicitação de Requisitos}
+%--------------------------------------------------------------------------
+
+    A elicitação de requisitos teve como objetivo recolher informação junto dos \textit{stakeholders} e a partir do contexto do domínio, de forma a identificar necessidades, problemas atuais e expectativas relativamente ao sistema.
+
+    As principais fontes de informação consideradas foram:
+    \begin{itemize}
+      \item \textit{stakeholders} com participação direta no processo (utilizadores operacionais e gestão);
+      \item documentação e regras existentes relevantes para o domínio (procedimentos, formulários, registos e políticas internas, quando aplicável);
+      \item descrição do processo atual e exemplos reais de situações típicas e excecionais.
+    \end{itemize}
+
+    Para recolha de informação foram usadas entrevistas semi-estruturadas e discussão orientada por exemplos. As entrevistas incluíram perguntas fechadas para confirmar passos do processo e dados necessários (ex.: que informação é registada, quando e por quem) e perguntas abertas para identificar problemas frequentes, necessidades não satisfeitas e melhorias desejadas. Sempre que útil, foram utilizados cenários de alto nível para apoiar os \textit{stakeholders} a explicitar detalhes que normalmente ficam implícitos, incluindo exceções e variações do processo.
+
+    Os resultados da elicitação foram registados como uma lista de necessidades, objetivos e restrições, mantendo a referência à origem (\textit{stakeholder}/documento/cenário). Esta lista constituiu o ponto de partida para a transformação em \textit{user stories}, clarificação de ambiguidades e posterior derivação de requisitos funcionais e não funcionais.
+
+    \begin{tcolorbox}[title=Interação com o LLM]
+    \textbf{Prompt utilizado}
+
+    Com base no contexto do domínio e nos \textit{stakeholders} identificados, apoia a elicitação de requisitos de um sistema, com o objetivo de recolher informação relevante para identificar necessidades, problemas atuais, restrições e expectativas relativamente ao sistema a desenvolver. Estrutura a recolha de informação através de entrevistas semi-estruturadas e discussão orientada por exemplos, incluindo perguntas fechadas e abertas.
+
+    \tcblower
+
+    \textbf{Análise crítica}
+
+    O LLM contribuiu com uma estrutura metodológica adequada para a elicitação, incluindo fontes de informação e técnicas de recolha. Ainda assim, a resposta inicial era genérica em rastreabilidade e precisava de maior ligação às decisões documentais do projeto.
+
+    A versão final foi refinada para explicitar a combinação de perguntas abertas/fechadas, cenários de apoio e registo da origem de cada necessidade. A revisão humana garantiu coerência com as entrevistas sintetizadas no corpo e com o detalhe disponibilizado em anexo.
+    \end{tcolorbox}
+
+%--------------------------------------------------------------------------
+\section{Simulação de Entrevistas com \textit{Stakeholders}}
+\label{sec:entrevistas}
+%--------------------------------------------------------------------------
+
+    A simulação de entrevistas com \textit{stakeholders} constituiu uma das técnicas de elicitação mais relevantes deste projeto, tirando partido direto das capacidades dos LLMs para gerar diálogos realistas com perfis ficcionais mas representativos dos utilizadores reais do sistema. Foram realizadas \textbf{5 entrevistas simuladas} com recurso a um LLM. As transcrições completas encontram-se no Anexo~A.
+
+    \subsection{Entrevista 1 - Administrador da Cadeia (Sr. Manuel Correia, 55 anos)}
+    Revelou necessidades de visibilidade centralizada, negociação com fornecedores ao nível da cadeia, alertas de \textit{stock} e relatórios comparativos entre lojas. Destacou a importância de perfis de acesso diferenciados e a necessidade de um \textit{dashboard} diário com o desempenho agregado.
+
+    \subsection{Entrevista 2 - Gerente de Loja (D. Teresa Vieira, 38 anos)}
+    Evidenciou problemas com registos manuais em \textit{Excel}, falta de alertas automáticos de \textit{stock} e necessidade de encomendas integradas. Valoriza a consolidação automática ao fecho de caixa e uma interface simples para operadores com pouca formação técnica.
+
+    \subsection{Entrevista 3 - Operador de Caixa (João Martins, 22 anos)}
+    Destacou a importância da rapidez no registo de vendas, a necessidade de pesquisa alternativa de produtos quando o leitor falha, emissão automática de fatura com NIF e aplicação automática de promoções.
+
+    \subsection{Entrevista 4 - Fornecedor (Distribuição Almeida, Lda.)}
+    Identificou ineficiências no processo de encomendas descentralizado e a necessidade de padronização e centralização das encomendas. Sugeriu a confirmação de encomendas no sistema com registo de datas de entrega e resolução de discrepâncias.
+
+    \subsection{Entrevista 5 - Contabilista (Dr. Carlos Ferreira, 48 anos)}
+    Sublinhou o processo penoso de compilação de dados financeiros mensais e a necessidade de exportação automática de dados de faturação por loja, com discriminação de IVA por taxa. Confirmou os requisitos legais de retenção de dados por 10 anos e a necessidade de certificação AT para o \textit{software} de faturação.
+
+    \begin{tcolorbox}[title=Interação com o LLM]
+    \textbf{Prompt utilizado}
+
+    Simula uma entrevista de elicitação de requisitos com os \textit{stakeholders} definidos. Assume o perfil que te for fornecido, incluindo nome, idade, formação, experiência, função, responsabilidades e contexto profissional, e responde sempre de forma coerente com esse perfil. As respostas devem ser suficientemente concretas e detalhadas para permitir a identificação de requisitos funcionais e não funcionais. Mantém sempre o papel do \textit{stakeholder} durante toda a entrevista e responde em formato de diálogo com o analista.
+
+    \tcblower
+
+    \textbf{Análise crítica}
+
+    O LLM conseguiu manter a coerência de personagem e produzir entrevistas com conteúdo útil para extração de necessidades. Contudo, a versão inicial apresentava alguns trechos redundantes e diferenças de granularidade entre perfis.
+
+    Na revisão, os resultados foram sintetizados por stakeholder no corpo do relatório e mantidas as transcrições completas em anexo, em linha com a estratégia de concisão documental. Esta abordagem melhorou legibilidade sem perder evidência de origem.
+    \end{tcolorbox}
+
+%--------------------------------------------------------------------------
+\section{\textit{User Stories}}
+%--------------------------------------------------------------------------
+
+    As \textit{user stories} seguem o formato \textit{``Como [ator], quero [ação], para que [benefício].''} e estão associadas a requisitos funcionais para garantir a rastreabilidade. O resultado foi \textbf{29 \textit{user stories}} distribuídas por 4 atores: 10 para o Administrador da Cadeia (US-A01 a US-A10), 8 para o Gerente de Loja (US-G01 a US-G08), 8 para o Operador de Caixa (US-O01 a US-O08) e 3 para o Administrador IT (US-IT01 a US-IT03).
+
+    \begin{table}[H]
+    \centering
+    \small
+    \begin{tabular}{|c|p{8.5cm}|c|c|}
+    \hline
+    \textbf{ID} & \textbf{\textit{User Story}} & \textbf{RF} & \textbf{Pr.} \\
+    \hline
+    US-A01 & Como administrador, quero visualizar um \textit{dashboard} com as vendas de todas as lojas, para acompanhar o desempenho global. & RF13 & Alta \\
+    \hline
+    US-A02 & Como administrador, quero comparar as vendas entre lojas num dado período, para identificar lojas com desempenho inferior. & RF13 & Média \\
+    \hline
+    US-A03 & Como administrador, quero receber alertas de ruturas de \textit{stock} em qualquer loja, para coordenar a reposição. & RF06 & Alta \\
+    \hline
+    US-A04 & Como administrador, quero gerar relatórios de vendas por categoria de produto, para tomar decisões sobre o sortido. & RF14 & Alta \\
+    \hline
+    US-A05 & Como administrador, quero gerir o catálogo centralizado de produtos, para manter informação consistente. & RF05 & Alta \\
+    \hline
+    US-A06 & Como administrador, quero gerir os fornecedores da cadeia, para negociar condições centralizadas. & RF09 & Alta \\
+    \hline
+    US-A07 & Como administrador, quero exportar relatórios em PDF e CSV, para partilhar com o contabilista. & RF14 & Média \\
+    \hline
+    US-A08 & Como administrador, quero consultar o \textit{log} de ações críticas, para auditar operações suspeitas. & RF18 & Média \\
+    \hline
+    US-A09 & Como administrador, quero gerir os utilizadores e os seus perfis de acesso, para controlar quem acede a quê. & RF16 & Alta \\
+    \hline
+    US-A10 & Como administrador, quero ver o estado das consolidações diárias, para garantir dados atualizados. & RF12 & Média \\
+    \hline
+    \end{tabular}
+    \caption{\textit{User stories} --- Administrador da Cadeia.}
+    \label{tab:us_admin}
+    \end{table}
+
+    \begin{table}[H]
+    \centering
+    \small
+    \begin{tabular}{|c|p{8.5cm}|c|c|}
+    \hline
+    \textbf{ID} & \textbf{\textit{User Story}} & \textbf{RF} & \textbf{Pr.} \\
+    \hline
+    US-G01 & Como gerente, quero ver o \textit{stock} atual de todos os produtos da minha loja, para planear a reposição. & RF06 & Alta \\
+    \hline
+    US-G02 & Como gerente, quero receber alertas quando um produto atinge o \textit{stock} mínimo, para encomendar a tempo. & RF06 & Alta \\
+    \hline
+    US-G03 & Como gerente, quero criar encomendas a fornecedores diretamente no sistema, para não usar email ou telefone. & RF10 & Alta \\
+    \hline
+    US-G04 & Como gerente, quero registar a receção de mercadoria e atualizar o \textit{stock} automaticamente. & RF11 & Alta \\
+    \hline
+    US-G05 & Como gerente, quero ver um resumo diário de vendas da minha loja, para avaliar o desempenho do dia. & RF14 & Alta \\
+    \hline
+    US-G06 & Como gerente, quero realizar contagens de inventário e registar discrepâncias, para identificar perdas. & RF07 & Média \\
+    \hline
+    US-G07 & Como gerente, quero acompanhar o estado das encomendas a fornecedores, para saber quando esperar entregas. & RF10 & Média \\
+    \hline
+    US-G08 & Como gerente, quero receber sugestões automáticas de encomenda, para reposição mais eficiente. & RF08 & Média \\
+    \hline
+    \end{tabular}
+    \caption{\textit{User stories} --- Gerente de Loja.}
+    \label{tab:us_gerente}
+    \end{table}
+
+    \begin{table}[H]
+    \centering
+    \small
+    \begin{tabular}{|c|p{8.5cm}|c|c|}
+    \hline
+    \textbf{ID} & \textbf{\textit{User Story}} & \textbf{RF} & \textbf{Pr.} \\
+    \hline
+    US-O01 & Como operador, quero registar uma venda passando produtos pelo leitor de código de barras. & RF01 & Alta \\
+    \hline
+    US-O02 & Como operador, quero pesquisar um produto pelo nome ou código quando o leitor não funcionar. & RF01 & Alta \\
+    \hline
+    US-O03 & Como operador, quero que o sistema calcule o total e o IVA automaticamente. & RF01 & Alta \\
+    \hline
+    US-O04 & Como operador, quero emitir fatura com o NIF do cliente quando solicitado. & RF01 & Alta \\
+    \hline
+    US-O05 & Como operador, quero que as promoções sejam aplicadas automaticamente. & RF03 & Média \\
+    \hline
+    US-O06 & Como operador, quero realizar a abertura e o fecho de caixa no sistema. & RF04 & Alta \\
+    \hline
+    US-O07 & Como operador, quero anular uma venda quando necessário, para corrigir erros. & RF02 & Média \\
+    \hline
+    US-O08 & Como operador, quero processar devoluções de clientes. & RF02 & Média \\
+    \hline
+    \end{tabular}
+    \caption{\textit{User stories} --- Operador de Caixa.}
+    \label{tab:us_operador}
+    \end{table}
+
+    \begin{table}[H]
+    \centering
+    \small
+    \begin{tabular}{|c|p{8.5cm}|c|c|}
+    \hline
+    \textbf{ID} & \textbf{\textit{User Story}} & \textbf{RF} & \textbf{Pr.} \\
+    \hline
+    US-IT01 & Como administrador IT, quero gerir os utilizadores e as suas permissões, para manter o sistema seguro. & RF16 & Alta \\
+    \hline
+    US-IT02 & Como administrador IT, quero monitorizar o estado das consolidações diárias, para intervir em caso de falha. & RF12 & Média \\
+    \hline
+    US-IT03 & Como administrador IT, quero consultar os \textit{logs} de auditoria, para investigar incidentes de segurança. & RF18 & Média \\
+    \hline
+    \end{tabular}
+    \caption{\textit{User stories} --- Administrador do Sistema (IT).}
+    \label{tab:us_it}
+    \end{table}
+
+    \begin{tcolorbox}[title=Interação com o LLM]
+    \textbf{Prompt utilizado}
+
+    Atua como especialista em Engenharia de Requisitos e, com base nos perfis dos \textit{stakeholders} identificados, gera \textit{user stories} para cada um. Em cada \textit{story}, os atores devem expressar, de forma simples, as funcionalidades e expectativas que têm perante o \textit{software}, indicando também o valor que essa funcionalidade lhes traz no seu dia-a-dia.
+
+    \tcblower
+
+    \textbf{Análise crítica}
+
+    A geração inicial do LLM foi útil para acelerar a produção de stories e cobrir os vários perfis de utilizador. No entanto, surgiram sobreposições e formulações demasiado próximas, o que dificultava priorização e validação.
+
+    Foi realizado refinamento manual com consolidação de duplicados, normalização linguística e mapeamento para requisitos funcionais. O resultado final ficou mais consistente, testável e orientado para a rastreabilidade bidirecional.
+    \end{tcolorbox}
+
+%--------------------------------------------------------------------------
+\section{Requisitos Funcionais e Não Funcionais}
+%--------------------------------------------------------------------------
+
+    A derivação de requisitos funcionais e não funcionais seguiu a distinção proposta por Sommerville~\cite{sommerville2016} (cap.~4) e a estrutura recomendada pela norma \textbf{IEEE 830/29148}~\cite{ieee830,ieee29148}: os \textbf{requisitos funcionais} descrevem as funções que o sistema deve executar, enquanto os \textbf{requisitos não funcionais} definem restrições sobre a forma como essas funções devem ser prestadas (desempenho, segurança, usabilidade, entre outros).
+
+    Os 19 requisitos funcionais foram consolidados a partir de uma especificação inicial mais granular (52 RF), organizados em 7 módulos funcionais. Os requisitos não funcionais foram derivados de categorias normalizadas, com métricas quantificáveis sempre que possível.
+
+    \begin{table}[H]
+    \centering
+    \small
+    \begin{tabular}{|c|p{11.5cm}|c|}
+    \hline
+    \textbf{ID} & \textbf{Requisito} & \textbf{Prioridade} \\
+    \hline
+    \multicolumn{3}{|l|}{\cellcolor{gray!15}\textbf{Módulo 1 --- Gestão de Vendas}} \\
+    \hline
+    RF01 & \textbf{Registar Venda (POS)} --- Registo de vendas com pesquisa de produtos, cálculo de IVA, múltiplos métodos de pagamento e emissão de fatura simplificada (modo protótipo académico --- ver ADR-009). & Alta \\ \\
+    \hline
+    RF02 & \textbf{Anular Venda e Processar Devolução} --- Anulação de vendas com motivo, devoluções com atualização de \textit{stock} e notas de crédito. & Média \\
+    \hline
+    RF03 & \textbf{Aplicar Promoções e Descontos} --- Definição e aplicação automática de promoções no POS. & Média \\
+    \hline
+    RF04 & \textbf{Abrir e Fechar Caixa} --- Registo de abertura/fecho, contagem de numerário, preparação para consolidação. & Alta \\
+    \hline
+    \multicolumn{3}{|l|}{\cellcolor{gray!15}\textbf{Módulo 2 --- Gestão de Produtos e Catálogo}} \\
+    \hline
+    RF05 & \textbf{Gerir Catálogo de Produtos} --- Catálogo centralizado com EAN-13, categorias, preços, IVA e histórico. & Alta \\
+    \hline
+    \multicolumn{3}{|l|}{\cellcolor{gray!15}\textbf{Módulo 3 --- Gestão de Inventário/\textit{Stocks}}} \\
+    \hline
+    RF06 & \textbf{Consultar e Monitorizar \textit{Stock}} --- \textit{Stock} por produto por loja, alertas de \textit{stock} mínimo. & Alta \\
+    \hline
+    RF07 & \textbf{Realizar Inventário Manual} --- Contagens físicas, discrepâncias, alertas de validade. & Média \\
+    \hline
+    RF08 & \textbf{Gerar Sugestões de Reposição} --- Sugestões automáticas com base em vendas e \textit{stock} mínimo. & Média \\
+    \hline
+    \multicolumn{3}{|l|}{\cellcolor{gray!15}\textbf{Módulo 4 --- Gestão de Fornecedores e Compras}} \\
+    \hline
+    RF09 & \textbf{Gerir Fornecedores} --- CRUD de fornecedores, associação a produtos, histórico. & Alta \\
+    \hline
+    RF10 & \textbf{Criar Encomenda a Fornecedor} --- Encomendas com rascunhos e acompanhamento de estados. & Alta \\
+    \hline
+    RF11 & \textbf{Registar Receção de Mercadoria} --- Receção, discrepâncias, atualização de \textit{stock}. & Alta \\
+    \hline
+    \multicolumn{3}{|l|}{\cellcolor{gray!15}\textbf{Módulo 5 --- Consolidação e Relatórios}} \\
+    \hline
+    RF12 & \textbf{Consolidar Dados Diários} --- Agregação automática diária dos dados operacionais (vendas, movimentos de \textit{stock}, KPIs) em tabelas de leitura denormalizadas, com histórico e retentativa em falhas. & Alta \\
+    \hline
+    RF13 & \textbf{Consultar \textit{Dashboard} de KPIs} --- KPIs e comparação entre lojas. & Alta \\
+    \hline
+    RF14 & \textbf{Gerar e Exportar Relatórios} --- Relatórios filtráveis, exportação em PDF/CSV. & Média \\
+    \hline
+    \multicolumn{3}{|l|}{\cellcolor{gray!15}\textbf{Módulo 6 --- Gestão de Utilizadores e Acessos}} \\
+    \hline
+    RF15 & \textbf{Autenticar no Sistema} --- \textit{Login}, bcrypt, bloqueio após 5 tentativas, sessão baseada em JWT (\textit{access token} de 15\,min e \textit{refresh token} de 7 dias com rotação --- ver ADR-004), perfis diferenciados. & Alta \\
+    \hline
+    RF16 & \textbf{Gerir Utilizadores e Perfis} --- CRUD de utilizadores, perfis, associação a lojas. & Alta \\
+    \hline
+    RF17 & \textbf{Editar Perfil Próprio} --- Edição de dados pessoais e alteração de \textit{password} (mínimo 8 caracteres, maiúscula, minúscula, dígito e símbolo). & Média \\
+    \hline
+    RF18 & \textbf{Consultar Logs de Auditoria} --- \textit{Logs} de ações críticas, imutáveis, consulta restrita a administrador. & Média \\
+    \hline
+    \multicolumn{3}{|l|}{\cellcolor{gray!15}\textbf{Módulo 7 --- Gestão de Lojas}} \\
+    \hline
+    RF19 & \textbf{Gerir Lojas da Cadeia} --- CRUD de lojas, associação de funcionários, configurações. & Alta \\
+    \hline
+    \end{tabular}
+    \caption{Requisitos funcionais do sistema (19 RF organizados por módulo).}
+    \label{tab:rf}
+    \end{table}
+
+    \begin{table}[H]
+    \centering
+    \small
+    \begin{tabular}{|c|c|p{8.5cm}|c|}
+    \hline
+    \textbf{ID} & \textbf{Categoria} & \textbf{Requisito} & \textbf{Pr.} \\
+    \hline
+    RNF-01 & Desempenho & Registo de venda em $\leq 2$\,s. & Alta \\
+    \hline
+    RNF-02 & Desempenho & Consolidação diária em $< 5$\,min. & Alta \\
+    \hline
+    RNF-03 & Desempenho & Geração de relatórios em $< 10$\,s (até 1 ano de dados). & Média \\
+    \hline
+    RNF-04 & Disponibilidade & Disponibilidade do sistema $\geq 99{,}5\%$ durante o horário de funcionamento das lojas (07h00--23h00), medida mensalmente. & Alta \\
+    \hline
+    RNF-05 & Disponibilidade & Disponibilidade total do sistema $\geq 99\%$ em janela 24/7 (incluindo horário não comercial e janelas de manutenção planeadas), medida mensalmente. & Alta \\
+    \hline
+    RNF-06 & Fiabilidade & Integridade transacional (ACID) em todas as operações críticas. & Alta \\
+    \hline
+    RNF-07 & Fiabilidade & Retentativa automática de consolidação (3 tentativas a 30, 60 e 90 min). & Média \\
+    \hline
+    RNF-08 & Segurança & \textit{Passwords} armazenadas com bcrypt e \textit{salt}. & Alta \\
+    \hline
+    RNF-09 & Segurança & Comunicações encriptadas (HTTPS/TLS). & Alta \\
+    \hline
+    RNF-10 & Segurança & Conformidade com o RGPD no tratamento e retenção de dados pessoais. & Alta \\
+    \hline
+    RNF-11 & Usabilidade & Interface POS operável por utilizador sem formação técnica em menos de 1\,h. & Alta \\
+    \hline
+    RNF-12 & Usabilidade & Interface responsiva para \textit{desktop} e \textit{tablet}. & Média \\
+    \hline
+    RNF-13 & Escalabilidade & Suporte a até 20 lojas sem degradação de desempenho. & Média \\
+    \hline
+    RNF-14 & Manutenibilidade & Código conforme padrões .NET com comentários XML e cobertura de testes $\geq 70\%$. & Média \\
+    \hline
+    RNF-15 & Portabilidade & Compatível com Chrome, Firefox e Edge (versões recentes). & Alta \\
+    \hline
+    RNF-16 & \textit{Backup} & \textit{Backups} automáticos diários com retenção mínima de 10 anos. & Alta \\
+    \hline
+    \end{tabular}
+    \caption{Requisitos não-funcionais do sistema.}
+    \label{tab:rnf}
+    \end{table}
+
+    \begin{tcolorbox}[title=Interação com o LLM]
+    \textbf{Prompt utilizado}
+
+    Atua como Especialista em Engenharia de Requisitos. Extrai requisitos funcionais e não funcionais a partir dos resultados das entrevistas e das \textit{user stories} geradas. Organiza os requisitos funcionais por módulo funcional e classifica cada requisito por prioridade. Para os requisitos não funcionais, usa categorias normalizadas (desempenho, disponibilidade, fiabilidade, segurança, usabilidade, escalabilidade, manutenibilidade, portabilidade e backup) e gera métricas quantificáveis sempre que possível.
+
+    \tcblower
+
+    \textbf{Análise crítica}
+
+    O LLM foi útil para acelerar a derivação inicial dos requisitos funcionais e não funcionais e para propor uma organização modular coerente com o domínio. Ainda assim, a versão preliminar incluía alguns requisitos sobrepostos e outros formulados de forma demasiado genérica para validação objetiva.
+
+    Na revisão, os requisitos foram consolidados, desambiguados e convertidos em enunciados mais mensuráveis, com prioridade e rastreabilidade explícitas. O resultado final ficou mais consistente com os cenários de uso e mais adequado para servir de base à implementação e aos testes.
+    \end{tcolorbox}
+
+
+
+%--------------------------------------------------------------------------
+\section{Análise de Requisitos --- Ambiguidades e Refinamentos}
+\label{sec:ambiguidades}
+%--------------------------------------------------------------------------
+
+    O refinamento de requisitos ambíguos é uma atividade crítica da engenharia de requisitos, tendo por objetivo eliminar imprecisões, contradições e omissões que possam comprometer as fases subsequentes de desenvolvimento. Sommerville~\cite{sommerville2016} (cap.~4, secção~4.6) enfatiza que os requisitos devem ser verificados quanto a completude, consistência e ausência de ambiguidades. Um requisito é considerado ambíguo quando não é mensurável, verificável ou quando admite múltiplas interpretações.
+
+    Foram identificados os seguintes requisitos ambíguos e aplicados os respetivos refinamentos:
+
+    \textbf{Ambiguidade 1:} ``Consolidação ao fim do dia''
+    \begin{itemize}
+        \item \textit{Requisito original}: ``A informação deverá ser consolidada ao fim do dia.''
+        \item \textit{Problema}: O que define ``fim do dia''? Depende do utilizador, da loja ou de um horário fixo?
+        \item \textit{Refinamento}: A consolidação é acionada pelo fecho de caixa (UC04) ou por processo agendado às 23h30, com retentativa automática a 30, 60 e 90 minutos em caso de falha (RNF-07).
+    \end{itemize}
+
+    \textbf{Ambiguidade 2:} ``Operação autónoma''
+    \begin{itemize}
+        \item \textit{Requisito original}: ``Cada loja atua de forma autónoma.''
+        \item \textit{Problema}: O sistema deve funcionar sem ligação à Internet? Por quanto tempo?
+        \item \textit{Refinamento (Etapa~1)}: Cada loja operaria com instância local independente (RT05), com sincronização posterior ao sistema central.
+        \item \textit{Refinamento revisto (Etapa~2)}: Após análise de \textit{trade-offs} (ADR-001), a equipa adotou uma topologia de \textbf{instância única centralizada}. ``Autonomia'' passa a referir-se à autonomia \textbf{operacional} de cada loja (gestão local de \textit{stock}, encomendas, abertura/fecho de caixa) e não à autonomia técnica de \textit{deployment}. A operação POS depende da disponibilidade da ligação à Internet, mitigada pelos requisitos de disponibilidade RNF-04 e RNF-05.
+    \end{itemize}
+
+    \textbf{Ambiguidade 3:} ``Relatórios de gestão''
+    \begin{itemize}
+        \item \textit{Requisito original}: ``Geração de relatórios por loja, período e categoria.''
+        \item \textit{Problema}: Quais os tipos específicos de relatório? Em que formatos?
+        \item \textit{Refinamento}: 4 tipos --- vendas, \textit{stock}, compras/fornecedores e \textit{dashboard} de KPIs. Exportação em PDF e CSV (RF14, RNF-03).
+    \end{itemize}
+
+    \textbf{Ambiguidade 4:} ``O sistema deve ser seguro''
+    \begin{itemize}
+        \item \textit{Requisito original}: ``O sistema deve ser seguro.''
+        \item \textit{Problema}: ``Seguro'' não é mensurável nem verificável.
+        \item \textit{Refinamento}: O sistema só pode ser acedido por utilizadores autenticados (RF15); a \textit{password} deve ter no mínimo 8 caracteres, incluindo maiúscula, minúscula, dígito e símbolo (RF17); após 5 tentativas falhadas, a conta é bloqueada durante 15 minutos (RF15/RNF-08).
+    \end{itemize}
+
+    \begin{tcolorbox}[title=Interação com o LLM]
+    \textbf{Prompt utilizado}
+
+    Faz uma revisão aos requisitos definidos até ao momento, identificando ambiguidades na sua formulação. Para cada ambiguidade encontrada, formula questões de clarificação e apresenta possíveis propostas de refinamento que permitam eliminá-la. No final, indica que cada refinamento proposto deverá ser revisto e aprovado pela equipa de trabalho.
+
+    \tcblower
+
+    \textbf{Análise crítica}
+
+    O LLM ajudou a identificar ambiguidades relevantes e a sugerir perguntas de clarificação com rapidez. Ainda assim, parte dos refinamentos propostos estava formulada de modo abstrato e exigiu concretização em critérios operacionais verificáveis.
+
+    A equipa converteu enunciados vagos em formulações mensuráveis e alinhadas ao contexto do sistema (ex.: consolidação temporal, operação autónoma e tipologia de relatórios). O resultado final reforça a qualidade dos requisitos e reduz o risco de interpretação divergente.
+    \end{tcolorbox}
+
+%--------------------------------------------------------------------------
+\section{Casos de Uso}
+%--------------------------------------------------------------------------
+
+    A modelação de casos de uso teve como objetivo descrever, de forma detalhada e estruturada, as interações entre os atores e o sistema para cada funcionalidade identificada nos requisitos funcionais. Os casos de uso seguem o \textbf{formato expandido} recomendado por Sommerville~\cite{sommerville2016} (cap.~4, secção~4.5) e Cockburn~\cite{cockburn2001}, incluindo fluxo principal, fluxos alternativos, fluxos de exceção, pré e pós-condições, regras de negócio e validações de dados.
+
+    Foram modelados \textbf{19 casos de uso} (UC01--UC19), com correspondência 1:1 aos 19 requisitos funcionais, conforme a Tabela~\ref{tab:uc_rf_llm}.
+
+    \begin{table}[H]
+    \centering
+    \small
+    \begin{tabular}{|c|l|l|}
+    \hline
+    \textbf{UC} & \textbf{Nome} & \textbf{RF} \\
+    \hline
+    UC01 & Registar Venda (POS) & RF01 \\
+    UC02 & Anular Venda e Processar Devolução & RF02 \\
+    UC03 & Aplicar Promoções e Descontos & RF03 \\
+    UC04 & Abrir e Fechar Caixa & RF04 \\
+    UC05 & Gerir Catálogo de Produtos & RF05 \\
+    UC06 & Consultar e Monitorizar \textit{Stock} & RF06 \\
+    UC07 & Realizar Inventário Manual & RF07 \\
+    UC08 & Gerar Sugestões de Reposição & RF08 \\
+    UC09 & Gerir Fornecedores & RF09 \\
+    UC10 & Criar Encomenda a Fornecedor & RF10 \\
+    UC11 & Registar Receção de Mercadoria & RF11 \\
+    UC12 & Consolidar Dados Diários & RF12 \\
+    UC13 & Consultar \textit{Dashboard} de KPIs & RF13 \\
+    UC14 & Gerar e Exportar Relatórios & RF14 \\
+    UC15 & Autenticar no Sistema & RF15 \\
+    UC16 & Gerir Utilizadores e Perfis & RF16 \\
+    UC17 & Editar Perfil Próprio & RF17 \\
+    UC18 & Consultar Logs de Auditoria & RF18 \\
+    UC19 & Gerir Lojas da Cadeia & RF19 \\
+    \hline
+    \end{tabular}
+    \caption{Correspondência entre casos de uso e requisitos funcionais.}
+    \label{tab:uc_rf_llm}
+    \end{table}
+
+    Os diagramas UML de casos de uso foram criados em Visual Paradigm. O diagrama UML geral encontra-se no Anexo~D; os casos de uso detalhados permanecem organizados no Anexo~B.
+
+    São apresentados em detalhe os casos de uso UC01 e UC15, representativos dos módulos de maior impacto operacional (POS e autenticação). Os restantes casos de uso (UC02--UC19) encontram-se detalhados no Anexo~B.
+
+    \begin{tcolorbox}[title=Interação com o LLM]
+    \textbf{Prompt utilizado}
+
+    Para cada requisito funcional (RF01--RF19), gera o caso de uso correspondente (UC01--UC19) em formato expandido, com nível de detalhe suficiente para servir de base à implementação. Inclui fluxo principal, fluxos alternativos e de exceção, pré e pós-condições, regras de negócio e referências aos requisitos. Gera também código PlantUML para os diagramas de casos de uso organizados por módulo funcional.
+
+    \tcblower
+
+    \textbf{Análise crítica}
+
+    O LLM facilitou a criação inicial dos casos de uso em formato expandido e ajudou a manter uma estrutura uniforme entre UCs. No entanto, a primeira versão incluía alguns fluxos excessivamente verbosos e certas regras de negócio ainda pouco alinhadas com as prioridades reais do sistema.
+
+    Na revisão, os casos de uso foram ajustados para reforçar a clareza, a consistência e o mapeamento direto com os requisitos funcionais. Também foi feito controlo de qualidade sobre pré/pós-condições, exceções e rastreabilidade, garantindo uma base mais sólida para a implementação e a validação.
+    \end{tcolorbox}
+
+\subsection{Descrição Detalhada dos Casos de Uso}
+
+%--- UC01 ---
+\subsubsection{UC01 --- Registar Venda (POS)}
+
+\begin{table}[H]
+\centering\small
+\begin{tabular}{|p{3cm}|p{11cm}|}
+\hline
+\textbf{ID / Nome} & UC01 --- Registar Venda (POS) \\
+\hline
+\textbf{Ator Principal} & Operador de Caixa \\
+\hline
+\textbf{Descrição} & Registar a venda de um ou mais produtos com cálculo automático de totais, IVA e emissão de fatura/recibo. \\
+\hline
+\textbf{Pré-condições} & 1) Operador autenticado. 2) Caixa do dia aberta (UC04). 3) Produtos ativos no catálogo. \\
+\hline
+\textbf{Pós-condições} & 1) Venda registada com estado ``Concluída''. 2) \textit{Stock} decrementado. 3) Fatura/recibo emitido (modo protótipo académico --- ver ADR-009). 4) Alertas de \textit{stock} mínimo gerados, se aplicável. \\
+\hline
+\textbf{Fluxo Principal} & 1. Clicar ``Nova Venda''. 2. Passar produto no leitor (EAN-13). 3. Sistema valida código e \textit{stock}. 4. Produto adicionado com preço, IVA e qtd=1. 5. Totais recalculados. 6. Repetir para mais produtos. 7. ``Finalizar Venda'' → ecrã de pagamento. 8. Selecionar método (Numerário/Cartão/MB). 9. Se numerário: introduzir valor, sistema calcula troco. 10. Confirmar → venda persistida, \textit{stock} atualizado, fatura emitida. \\
+\hline
+\textbf{Fluxos Alt.} & \textbf{3a.} Leitor falha → pesquisa textual (nome/código). \textbf{5a.} Fatura com NIF → validação mod~11. \textbf{11a.} Remover produto da lista. \textbf{14a.} Cliente desiste → venda cancelada (sem afetar \textit{stock}). \\
+\hline
+\textbf{Exceções} & E1: Produto não encontrado. E2: \textit{Stock} insuficiente. E3: NIF inválido. E4: Valor insuficiente (numerário). E5: Falha BD (\textit{rollback} ACID). \\
+\hline
+\textbf{Regras de Negócio} & RN01: Mínimo 1 produto. RN02: IVA por linha (6/13/23\%). RN03: Nº fatura sequencial por loja/ano. RN04: Faturação em modo \textbf{protótipo académico} (ver ADR-009); a conformidade fiscal certificada da AT (Portaria 363/2010, ATCUD, \textit{hash chain}, SAF-T) está fora do âmbito do projeto. \\
+\hline
+\textbf{RF Associados} & RF01, RF02, RF03, RF06, RNF-01, RNF-06 \\
+\hline
+\end{tabular}
+\caption{Caso de uso UC01 --- Registar Venda (POS).}
+\end{table}
+
+%--- UC15 ---
+\subsubsection{UC15 --- Autenticar no Sistema}
+
+\begin{table}[H]
+\centering\small
+\begin{tabular}{|p{3cm}|p{11cm}|}
+\hline
+\textbf{ID / Nome} & UC15 --- Autenticar no Sistema \\
+\hline
+\textbf{Ator Principal} & Utilizador (qualquer perfil) \\
+\hline
+\textbf{Descrição} & \textit{Login} com email/\textit{password}, validação bcrypt, sessão JWT, redirecionamento por perfil. \\
+\hline
+\textbf{Pré-condições} & 1) Sistema acessível via navegador. 2) Conta ativa com credenciais. 3) Sem sessão ativa. \\
+\hline
+\textbf{Pós-condições} & 1) Sessão autenticada (JWT). 2) \textit{Dashboard} do perfil carregado. 3) \textit{Log} de auditoria (userId, IP, resultado). \\
+\hline
+\textbf{Fluxo Principal} & 1. Página de \textit{login}. 2. Preencher email e \textit{password}. 3. ``Entrar''. 4. Validar formato. 5. Consultar BD (\texttt{Utilizadores}). 6. Comparar \textit{hash} (bcrypt). 7. Verificar estado ``Ativo''. 8. Verificar bloqueio ($< 5$ tentativas). 9. Sucesso → sessão JWT → \textit{dashboard} por perfil. \\
+\hline
+\textbf{Fluxos Alt.} & \textbf{5a.} Formato inválido → mensagem \textit{inline}. \textbf{6a/7a.} Credenciais inválidas (mensagem genérica). \textbf{8a.} Conta inativa. \textbf{9a.} Conta bloqueada (15\,min). \\
+\hline
+\textbf{Exceções} & E1: Falha BD → ``Serviço indisponível''. E2: Navegador fechado → sem sessão. \\
+\hline
+\textbf{Regras de Negócio} & RN01: 5 tentativas → bloqueio 15\,min. RN02: Sem enumeração de utilizadores. RN03: \textit{Access token} JWT expira após 15\,min; \textit{refresh token} válido durante 7 dias com rotação a cada utilização (ADR-004). RN04: bcrypt com \textit{salt}. \\
+\hline
+\textbf{RF Associados} & RF15, RF18, RNF-08, RNF-09, RNF-10 \\
+\hline
+\end{tabular}
+\caption{Caso de uso UC15 --- Autenticar no Sistema.}
+\end{table}
+
+Os restantes casos de uso (UC02--UC14 e UC16--UC19) encontram-se detalhados no Anexo~B.
+
+%--------------------------------------------------------------------------
+\section{Modelo de Domínio}
+%--------------------------------------------------------------------------
+
+Tendo por base os requisitos previamente recolhidos e o contexto de negócio caracterizado nos capítulos anteriores, foi desenvolvido o modelo de domínio que representa, de forma estática e independente da solução a desenvolver, as principais entidades e relações que caracterizam a cadeia Belo Mercado.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\linewidth]{images/Modelo de Domínio.jpg}
+    \caption{Modelo de Domínio}
+    \label{fig:modelo-dominio}
+\end{figure}
+
+O modelo organiza-se em torno da Loja, que agrega os funcionários (especializados em Operador de Caixa e Gerente de Loja), o inventário e a atividade operacional. O catálogo é partilhado por toda a cadeia através das entidades Produto e Categoria, sendo a presença de cada produto numa loja representada por Stock. Cada produto tem associada uma Validade e pode ser alvo de Promoção aplicáveis num dado período.
+
+A operação de venda concretiza-se em Caixa (sessão de trabalho diária), Venda e respetivas LinhaVenda, culminando na emissão de uma Fatura. Quando o consumidor solicita identificação fiscal, a Venda fica opcionalmente associada a um Cliente, entidade que armazena os dados mínimos necessários para emissão de fatura com NIF (cardinalidade 0..1). Note-se que o Cliente, embora identificado como \textit{stakeholder}, não é ator do sistema --- não interage diretamente com a aplicação, sendo apenas registado como entidade de dados quando solicita fatura nominativa. O abastecimento é suportado por Encomenda feita por uma loja a um Fornecedor, composta por linhas que referem os produtos do catálogo.
+
+
+Em suma, o modelo captura os três eixos do negócio(organização, venda e abastecimento) fornecendo uma base conceptual coerente para as etapas seguintes.
+
+%--------------------------------------------------------------------------
+\section{Diagrama de casos de uso}
+%--------------------------------------------------------------------------
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\linewidth]{images/Diagrama de Use Cases.jpg}
+    \caption{Diagrama de Use Cases}
+    \label{fig:diagrama-use-cases}
+\end{figure}
+
+Os atores identificados no diagrama Operador de Caixa, Gerente de Loja, Administrador da Cadeia e Administrador IT especializam o ator genérico Utilizador e interagem com casos de uso que, em essência, se encontram distribuídos por cinco categorias funcionais: operações de venda, gestão de inventário e loja, administração global e configurações, segurança e administração técnica, e tarefas automatizadas.
+
+Nas operações de venda, da responsabilidade do Operador de Caixa, encontram-se os casos de uso Registar Venda, que constitui a atividade central do ponto de venda e inclui obrigatoriamente a operação Abrir e Fechar Caixa, e ainda Anular Venda e Processar Devolução, destinado à correção de vendas previamente registadas e ao processamento de devoluções.
+
+Na gestão de inventário e loja, da responsabilidade do Gerente de Loja, estão incluídos os casos de uso Consultar e Monitorizar Stock, Realizar Inventário Manual, Registar Receção de Mercadoria, Criar Encomenda a Fornecedor e Aplicar Promoções e Descontos, cobrindo todo o ciclo operacional de uma loja, desde o controlo do inventário até à reposição junto dos fornecedores.
+Na administração global e configurações, da responsabilidade do Administrador da Cadeia, foram identificados Consultar Dashboard de KPIs, Gerir Fornecedores, Gerir Catálogo de Produtos, Gerir Lojas da Cadeia e Gerar e Exportar Relatórios, que suportam a visão consolidada do negócio e a configuração transversal da cadeia.
+
+Na categoria de segurança e administração técnica, partilhada pelo Administrador da Cadeia e pelo Administrador IT, encontram-se os casos de uso Gerir Utilizadores e Perfis e Consultar Logs de Auditoria, destinados ao controlo de acessos e à rastreabilidade das ações realizadas no sistema.
+
+Por fim, as tarefas automatizadas, executadas pelo próprio sistema sem intervenção direta de um ator humano, compreendem Gerar Sugestões de Reposição e Consolidar Dados Diários, correspondendo a processos agendados que asseguram, respetivamente, o reabastecimento proativo das lojas e a agregação diária de informação operacional no sistema central.
+Transversalmente a todas as categorias, qualquer utilizador do sistema necessita de Autenticar no Sistema antes de aceder às funcionalidades, podendo também Editar Perfil para manter os seus dados atualizados.

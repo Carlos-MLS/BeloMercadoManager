@@ -1,0 +1,116 @@
+@page "/fornecedores"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "GerenteLoja,AdminCadeia")]
+@rendermode InteractiveServer
+@using BeloMercado.Application.Dtos.Fornecedores
+@using BeloMercado.BackofficeWeb.Auth
+@using Microsoft.AspNetCore.Components.Authorization
+@inject FornecedoresApiClient FornecedoresApi
+@inject AuthenticationStateProvider AuthState
+
+<PageTitle>Fornecedores — Belo Mercado</PageTitle>
+
+<div class="page">
+    <header class="page-header">
+        <h1>Fornecedores</h1>
+        <div class="actions">
+            <a href="/" class="back-link">← Voltar</a>
+            @if (isAdmin)
+            {
+                <a href="/fornecedores/novo" class="btn btn-primary">+ Novo fornecedor</a>
+            }
+        </div>
+    </header>
+
+    @if (!string.IsNullOrEmpty(error))
+    {
+        <div class="alert alert-danger">@error</div>
+    }
+
+    @if (busy)
+    {
+        <p>A carregar...</p>
+    }
+    else if (fornecedores.Count == 0)
+    {
+        <p class="empty">Sem fornecedores registados.</p>
+    }
+    else
+    {
+        <table>
+            <thead>
+                <tr>
+                    <th>Nome</th>
+                    <th>NIF</th>
+                    <th>Ramo</th>
+                    <th>Contacto</th>
+                    <th>Email</th>
+                    <th class="num">Produtos</th>
+                    <th>Estado</th>
+                    @if (isAdmin) { <th></th> }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var f in fornecedores.OrderBy(f => f.Nome))
+                {
+                    <tr class="@(f.Ativo ? "" : "row-inactive")">
+                        <td><strong>@f.Nome</strong></td>
+                        <td><code>@f.Nif</code></td>
+                        <td>@(string.IsNullOrEmpty(f.Ramo) ? "—" : f.Ramo)</td>
+                        <td>@f.Contacto</td>
+                        <td>@f.Email</td>
+                        <td class="num">@f.ProdutosAssociados.Count</td>
+                        <td>
+                            <span class="badge @(f.Ativo ? "badge-ok" : "badge-off")">
+                                @(f.Ativo ? "Ativo" : "Inativo")
+                            </span>
+                        </td>
+                        @if (isAdmin)
+                        {
+                            <td>
+                                <a href="@($"/fornecedores/{f.Id}")" class="btn btn-link">Editar</a>
+                            </td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@code {
+    private List<FornecedorResponse> fornecedores = new();
+    private bool busy = true;
+    private bool isAdmin;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthState.GetAuthenticationStateAsync();
+        isAdmin = state.User.IsInRole("AdminCadeia");
+
+        try { fornecedores = (await FornecedoresApi.ListAsync()).ToList(); }
+        catch (Exception ex) { error = $"Erro ao carregar: {ex.Message}"; }
+        finally { busy = false; }
+    }
+}
+
+<style>
+    .page { max-width: 100%; margin: 24px 0; padding: 0 24px; }
+    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .actions { display: flex; gap: 16px; align-items: center; }
+    .back-link { color: #1f4ea1; text-decoration: none; }
+    .btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem; text-decoration: none; }
+    .btn-primary { background: #1f4ea1; color: white; }
+    .btn-link { background: none; color: #1f4ea1; padding: 4px 8px; }
+    .alert-danger { padding: 8px; background: #f8d7da; color: #842029; border-radius: 4px; margin-bottom: 12px; }
+    table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; }
+    th, td { padding: 10px 12px; border-bottom: 1px solid #eee; text-align: left; }
+    th { background: #f5f5f7; font-weight: 600; }
+    th.num, td.num { text-align: right; }
+    code { background: #f5f5f7; padding: 1px 4px; border-radius: 3px; font-size: 0.85rem; }
+    .row-inactive { background: #fafafa; color: #888; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; }
+    .badge-ok { background: #d1e7dd; color: #0f5132; }
+    .badge-off { background: #e9ecef; color: #495057; }
+    .empty { color: #888; font-style: italic; }
+</style>

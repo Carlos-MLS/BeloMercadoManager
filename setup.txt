@@ -1,0 +1,203 @@
+Belo Mercado Manager — Setup do ambiente de desenvolvimento
+=============================================================
+
+Este ficheiro descreve, passo a passo, o que cada membro da equipa
+precisa de fazer numa VM Ubuntu (VirtualBox) limpa para conseguir
+correr o projeto localmente.
+
+Serve como referencia rapida. As regras formais e as razoes de cada
+escolha estao em docs/CLAUDE.md (seccoes "Development environment" e
+"Configuration policy").
+
+-------------------------------------------------------------
+0. Pre-requisitos
+-------------------------------------------------------------
+
+- Ubuntu 24.04 LTS (ou compativel) numa VM VirtualBox
+- Conta com permissoes de sudo
+- Acesso a internet
+- Git ja configurado (user.name, user.email)
+
+
+-------------------------------------------------------------
+1. Clonar o repositorio
+-------------------------------------------------------------
+
+    cd ~
+    mkdir -p 3ano && cd 3ano
+    git clone git@github.com:NunoSoares5/LI4.git
+    cd LI4/BeloMercadoManager
+
+
+-------------------------------------------------------------
+2. Instalar o .NET 8 SDK (Microsoft APT repository)
+-------------------------------------------------------------
+
+    wget https://packages.microsoft.com/config/ubuntu/24.04/packages-microsoft-prod.deb \
+         -O /tmp/packages-microsoft-prod.deb
+    sudo dpkg -i /tmp/packages-microsoft-prod.deb
+    rm /tmp/packages-microsoft-prod.deb
+    sudo apt-get update
+    sudo apt-get install -y dotnet-sdk-8.0
+
+Verificar:
+
+    dotnet --version          # tem de imprimir 8.0.x
+
+
+-------------------------------------------------------------
+3. Instalar o Docker
+-------------------------------------------------------------
+
+Se ainda nao estiver instalado:
+
+    sudo snap install docker
+
+Verificar:
+
+    docker --version          # qualquer versao recente serve
+
+Nota: a versao snap do Docker exige sudo para todos os comandos
+docker (a integracao com o grupo "docker" e quebrada). Por isso
+todos os comandos abaixo levam "sudo" a frente. Se preferires
+remover o sudo, instala o Docker pelo APT oficial em vez do snap.
+
+
+-------------------------------------------------------------
+4. Correr o SQL Server 2022 em Docker
+-------------------------------------------------------------
+
+A equipa partilha uma password unica para o utilizador "sa" (a mesma
+e usada no User Secrets do projeto). Define-a numa variavel de shell
+para nao a deixares em historico:
+
+    read -s -p "Password sa do SQL: " SA_PASSWORD; echo
+
+Arrancar o container (so na primeira vez):
+
+    sudo docker pull mcr.microsoft.com/mssql/server:2022-latest
+    sudo docker run -e "ACCEPT_EULA=Y" \
+                    -e "MSSQL_SA_PASSWORD=$SA_PASSWORD" \
+                    -p 1433:1433 \
+                    --name belomercado-sql \
+                    -v belomercado-data:/var/opt/mssql \
+                    -d mcr.microsoft.com/mssql/server:2022-latest
+
+Arranques seguintes:
+
+    sudo docker start belomercado-sql
+
+Verificar conectividade:
+
+    sudo docker exec -it belomercado-sql /opt/mssql-tools18/bin/sqlcmd \
+        -S localhost -U sa -P "$SA_PASSWORD" -C -Q "SELECT @@VERSION"
+
+
+-------------------------------------------------------------
+5. Configurar User Secrets do projeto API
+-------------------------------------------------------------
+
+Os segredos (connection string, chave JWT) NUNCA vao para o Git.
+Cada developer corre estes comandos uma vez na sua VM:
+
+    cd src/BeloMercado.Api
+    dotnet user-secrets init
+    dotnet user-secrets set "ConnectionStrings:DefaultConnection" \
+        "Server=localhost,1433;Database=BeloMercadoDB;User Id=sa;Password=$SA_PASSWORD;TrustServerCertificate=True;Encrypt=False;"
+    dotnet user-secrets set "Jwt:Key" "<chave-aleatoria-min-32-chars-partilhada-pela-equipa>"
+
+A chave JWT tem de ser identica entre desenvolvedores, caso contrario
+os tokens emitidos numa maquina nao validam noutra.
+
+
+-------------------------------------------------------------
+6. Restaurar dependencias e ferramentas locais
+-------------------------------------------------------------
+
+    cd ~/3ano/LI4/BeloMercadoManager
+    dotnet tool restore        # instala dotnet-ef do manifest local
+    dotnet restore             # restaura pacotes NuGet de todos os projetos
+    dotnet build               # tem de devolver 0 errors
+
+
+-------------------------------------------------------------
+7. Aplicar as migracoes Entity Framework Core
+-------------------------------------------------------------
+
+A primeira execucao cria a base de dados BeloMercadoDB e insere o
+utilizador admin de seed. Em execucoes seguintes aplica apenas as
+migrations pendentes.
+
+    dotnet ef database update --project src/BeloMercado.Infrastructure \
+                              --startup-project src/BeloMercado.Api
+
+
+-------------------------------------------------------------
+8. Correr a API
+-------------------------------------------------------------
+
+    dotnet run --project src/BeloMercado.Api
+
+URLs em modo Development:
+    Swagger UI: http://localhost:5009/swagger
+    API:       http://localhost:5009/api/v1/...
+
+Conta admin de seed (para login inicial):
+    email:    admin@belomercado.local
+    password: BeloMercado2026!
+
+Esta password so existe no ambiente de desenvolvimento academico.
+NAO usar em producao. A primeira tarefa de qualquer ambiente real
+e mudar esta password.
+
+
+-------------------------------------------------------------
+9. Correr os front-ends (PosWeb e BackofficeWeb)
+-------------------------------------------------------------
+
+Para um demo end-to-end precisas dos tres processos a correr em
+simultaneo. Em tres terminais separados (ou em background), com
+a API ja a correr no porto 5009:
+
+    # Terminal 2 - PosWeb (operadores de caixa)
+    dotnet run --project src/BeloMercado.PosWeb
+    # arranca em http://localhost:5108
+
+    # Terminal 3 - BackofficeWeb (gerentes / admins)
+    dotnet run --project src/BeloMercado.BackofficeWeb
+    # arranca em http://localhost:5132
+
+Os dois Blazor apps lem o url da API de "ApiBaseUrl" em
+appsettings.json (default: http://localhost:5009/). Se a API
+estiver noutro porto, sobreescreve com:
+
+    ApiBaseUrl__=http://localhost:XXXX/ dotnet run ...
+
+Ambos guardam o JWT em ProtectedSessionStorage (encriptado
+server-side via Data Protection API). O login feito num app
+nao "atravessa" para o outro - cada um tem a sua sessao.
+
+Fluxo de demo sugerido:
+    1. Login no PosWeb com o admin de seed
+    2. Abrir uma caixa em /caixa
+    3. Registar uma venda em /venda
+    4. Login no BackofficeWeb (mesmo admin)
+    5. Ver KPIs em /dashboard, gestao em /produtos / /utilizadores etc.
+
+
+-------------------------------------------------------------
+Resolucao de problemas
+-------------------------------------------------------------
+
+* "dotnet: command not found" depois de instalar
+    -> Fechar e abrir o terminal para refrescar o PATH.
+
+* O container do SQL Server fica em "Exited (1)" logo apos arrancar
+    -> Quase sempre password fraca. Tem de ter >=8 caracteres com
+       3 das 4 categorias (maiusculas, minusculas, digitos, simbolos).
+       Apaga o container (docker rm belomercado-sql) e o volume
+       (docker volume rm belomercado-data) e tenta de novo.
+
+* "TLS handshake failed" ao ligar do .NET ao SQL Server
+    -> A connection string tem de incluir TrustServerCertificate=True
+       (o certificado do container e self-signed).

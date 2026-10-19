@@ -1,0 +1,269 @@
+@page "/dashboard"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "GerenteLoja,AdminCadeia")]
+@rendermode InteractiveServer
+@using BeloMercado.Application.Dtos.Dashboards
+@using BeloMercado.Application.Dtos.Lojas
+@using BeloMercado.BackofficeWeb.Auth
+@using Microsoft.AspNetCore.Components.Authorization
+@inject DashboardsApiClient Dashboards
+@inject LojasApiClient LojasApi
+@inject ClockApiClient ClockApi
+@inject AuthenticationStateProvider AuthState
+
+<PageTitle>Dashboard — Belo Mercado</PageTitle>
+
+<div class="dash">
+    <header class="dash-header">
+        <h1>Dashboard</h1>
+        <a href="/" class="back-link">← Voltar</a>
+    </header>
+
+    <section class="filters">
+        <div class="filter">
+            <label>De</label>
+            <input type="date" @bind="dataInicio" @bind:event="onchange" />
+        </div>
+        <div class="filter">
+            <label>Até</label>
+            <input type="date" @bind="dataFim" @bind:event="onchange" />
+        </div>
+        @if (isAdmin)
+        {
+            <div class="filter">
+                <label>Loja</label>
+                <select @bind="lojaIdFiltro">
+                    <option value="">Todas as lojas</option>
+                    @foreach (var loja in lojas)
+                    {
+                        <option value="@loja.Id">@loja.Designacao</option>
+                    }
+                </select>
+            </div>
+        }
+        <button class="btn btn-primary" @onclick="ReloadAsync" disabled="@busy">
+            @(busy ? "A carregar..." : "Atualizar")
+        </button>
+    </section>
+
+    @if (!string.IsNullOrEmpty(error))
+    {
+        <div class="alert alert-danger">@error</div>
+    }
+
+    <section class="kpi-summary">
+        <div class="kpi-card">
+            <span class="kpi-label">Total de vendas</span>
+            <span class="kpi-value">@totalVendas.ToString("C", pt)</span>
+        </div>
+        <div class="kpi-card">
+            <span class="kpi-label">Transações</span>
+            <span class="kpi-value">@totalTransacoes</span>
+        </div>
+        <div class="kpi-card">
+            <span class="kpi-label">Ticket médio</span>
+            <span class="kpi-value">@ticketMedio.ToString("C", pt)</span>
+        </div>
+        <div class="kpi-card">
+            <span class="kpi-label">Anuladas / Devoluções</span>
+            <span class="kpi-value">@totalAnuladas / @totalDevolucoes</span>
+        </div>
+    </section>
+
+    <section class="kpi-table">
+        <h2>KPIs por dia</h2>
+        @if (kpis.Count == 0 && !busy)
+        {
+            <p class="empty">Sem dados no intervalo escolhido.</p>
+        }
+        else
+        {
+            <table>
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Loja</th>
+                        <th class="num">Vendas</th>
+                        <th class="num">Trans.</th>
+                        <th class="num">Ticket médio</th>
+                        <th class="num">IVA</th>
+                        <th class="num">Descontos</th>
+                        <th class="num">Anul./Dev.</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var k in kpis)
+                    {
+                        <tr>
+                            <td>@k.Data.ToString("yyyy-MM-dd")</td>
+                            <td>@LojaNome(k.LojaId)</td>
+                            <td class="num">@k.TotalVendas.ToString("C", pt)</td>
+                            <td class="num">@k.NumTransacoes</td>
+                            <td class="num">@k.TicketMedio.ToString("C", pt)</td>
+                            <td class="num">@k.TotalIva.ToString("C", pt)</td>
+                            <td class="num">@k.TotalDescontos.ToString("C", pt)</td>
+                            <td class="num">@k.VendasAnuladas / @k.Devolucoes</td>
+                            <td>
+                                <button class="btn btn-link" @onclick="() => LoadRankingAsync(k.LojaId, k.Data)">
+                                    Top 10
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </section>
+
+    @if (rankingDisponivel)
+    {
+        <section class="ranking">
+            <h2>Top 10 produtos — @rankingLojaNome (@rankingData?.ToString("yyyy-MM-dd"))</h2>
+            @if (ranking.Count == 0)
+            {
+                <p class="empty">Sem ranking disponível para este dia.</p>
+            }
+            else
+            {
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="num">#</th>
+                            <th>EAN</th>
+                            <th>Descrição</th>
+                            <th class="num">Qtd</th>
+                            <th class="num">Receita</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in ranking)
+                        {
+                            <tr>
+                                <td class="num">@r.Posicao</td>
+                                <td>@r.ProdutoEan13</td>
+                                <td>@r.ProdutoDescricao</td>
+                                <td class="num">@r.QuantidadeVendida</td>
+                                <td class="num">@r.Receita.ToString("C", pt)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </section>
+    }
+</div>
+
+@code {
+    private static readonly System.Globalization.CultureInfo pt =
+        System.Globalization.CultureInfo.GetCultureInfo("pt-PT");
+
+    private DateOnly dataInicio;
+    private DateOnly dataFim;
+    private Guid? lojaIdFiltro;
+
+    private bool isAdmin;
+    private bool busy;
+    private string? error;
+
+    private IReadOnlyList<LojaResponse> lojas = Array.Empty<LojaResponse>();
+    private List<KPIDiarioResponse> kpis = new();
+    private List<RankingProdutoResponse> ranking = new();
+    private bool rankingDisponivel;
+    private string? rankingLojaNome;
+    private DateOnly? rankingData;
+
+    private decimal totalVendas;
+    private int totalTransacoes;
+    private decimal ticketMedio;
+    private int totalAnuladas;
+    private int totalDevolucoes;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthState.GetAuthenticationStateAsync();
+        isAdmin = state.User.IsInRole("AdminCadeia");
+
+        var hoje = await ClockApi.GetTodayAsync();
+        dataInicio = hoje.AddDays(-7);
+        dataFim = hoje;
+
+        try { lojas = await LojasApi.ListAsync(); }
+        catch { /* lista vazia se API offline */ }
+
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        busy = true;
+        error = null;
+        rankingDisponivel = false;
+        try
+        {
+            var data = await Dashboards.GetKpisAsync(lojaIdFiltro, dataInicio, dataFim);
+            kpis = data.OrderByDescending(k => k.Data).ToList();
+            RecomputarTotais();
+        }
+        catch (Exception ex)
+        {
+            error = $"Não foi possível carregar KPIs: {ex.Message}";
+            kpis = new();
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task LoadRankingAsync(Guid lojaId, DateOnly data)
+    {
+        try
+        {
+            ranking = (await Dashboards.GetRankingAsync(lojaId, data)).ToList();
+            rankingLojaNome = LojaNome(lojaId);
+            rankingData = data;
+            rankingDisponivel = true;
+        }
+        catch (Exception ex)
+        {
+            error = $"Não foi possível carregar ranking: {ex.Message}";
+        }
+    }
+
+    private void RecomputarTotais()
+    {
+        totalVendas = kpis.Sum(k => k.TotalVendas);
+        totalTransacoes = kpis.Sum(k => k.NumTransacoes);
+        ticketMedio = totalTransacoes > 0 ? totalVendas / totalTransacoes : 0m;
+        totalAnuladas = kpis.Sum(k => k.VendasAnuladas);
+        totalDevolucoes = kpis.Sum(k => k.Devolucoes);
+    }
+
+    private string LojaNome(Guid id) =>
+        lojas.FirstOrDefault(l => l.Id == id)?.Designacao ?? id.ToString()[..8];
+}
+
+<style>
+    .dash { max-width: 100%; margin: 24px 0; padding: 0 24px; }
+    .dash-header { display: flex; justify-content: space-between; align-items: center; }
+    .back-link { color: #1f4ea1; text-decoration: none; }
+    .filters { display: flex; gap: 16px; align-items: end; margin: 16px 0 24px; flex-wrap: wrap; }
+    .filter { display: flex; flex-direction: column; }
+    .filter label { font-size: 0.85rem; color: #555; margin-bottom: 4px; }
+    .filter input, .filter select { padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; }
+    .btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem; }
+    .btn-primary { background: #1f4ea1; color: white; }
+    .btn-link { background: none; border: none; color: #1f4ea1; cursor: pointer; padding: 0; }
+    .btn:disabled { opacity: 0.6; }
+    .alert-danger { padding: 8px; background: #f8d7da; color: #842029; border-radius: 4px; margin-bottom: 12px; }
+    .kpi-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 24px; }
+    .kpi-card { padding: 16px; border: 1px solid #ddd; border-radius: 8px; background: #fff; display: flex; flex-direction: column; }
+    .kpi-label { font-size: 0.85rem; color: #555; margin-bottom: 6px; }
+    .kpi-value { font-size: 1.5rem; font-weight: 600; color: #1f4ea1; }
+    .kpi-table, .ranking { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-bottom: 24px; }
+    .kpi-table h2, .ranking h2 { margin-top: 0; font-size: 1.1rem; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 8px 10px; border-bottom: 1px solid #eee; text-align: left; }
+    th.num, td.num { text-align: right; }
+    .empty { color: #888; font-style: italic; }
+</style>

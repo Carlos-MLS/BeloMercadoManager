@@ -1,0 +1,279 @@
+@page "/encomendas/nova"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "GerenteLoja,AdminCadeia")]
+@rendermode InteractiveServer
+@using BeloMercado.Application.Dtos.Encomendas
+@using BeloMercado.Application.Dtos.Fornecedores
+@using BeloMercado.Application.Dtos.Lojas
+@using BeloMercado.BackofficeWeb.Auth
+@using Microsoft.AspNetCore.Components.Authorization
+@inject EncomendasApiClient EncomendasApi
+@inject FornecedoresApiClient FornecedoresApi
+@inject LojasApiClient LojasApi
+@inject AuthenticationStateProvider AuthState
+@inject NavigationManager Nav
+
+<PageTitle>Nova encomenda — Belo Mercado</PageTitle>
+
+<div class="page">
+    <header class="page-header">
+        <h1>Nova encomenda</h1>
+        <a href="/encomendas" class="back-link">← Voltar à lista</a>
+    </header>
+
+    @if (loading)
+    {
+        <p>A carregar...</p>
+    }
+    else if (fornecedoresAtivos.Count == 0)
+    {
+        <div class="alert alert-info">
+            Não existem fornecedores ativos. Cria um em <a href="/fornecedores/novo">novo fornecedor</a>.
+        </div>
+    }
+    else
+    {
+        @if (isAdmin)
+        {
+            <section class="card">
+                <h2>Loja destinatária</h2>
+                <select class="form-control" @bind="lojaIdValue">
+                    <option value="">— escolher loja —</option>
+                    @foreach (var l in lojas.Where(x => x.Ativo).OrderBy(x => x.Designacao))
+                    {
+                        <option value="@l.Id">@l.Designacao</option>
+                    }
+                </select>
+            </section>
+        }
+
+        <section class="card">
+            <h2>Fornecedor</h2>
+            <select class="form-control" @bind="fornecedorIdValue">
+                <option value="">— escolher —</option>
+                @foreach (var f in fornecedoresAtivos)
+                {
+                    <option value="@f.Id">@f.Nome (@f.ProdutosAssociados.Count produto(s))</option>
+                }
+            </select>
+        </section>
+
+        @if (fornecedorEscolhido is not null)
+        {
+            <section class="card">
+                <div class="card-header">
+                    <h2>Linhas</h2>
+                </div>
+
+                @if (fornecedorEscolhido.ProdutosAssociados.Count == 0)
+                {
+                    <p class="empty">Este fornecedor não tem produtos associados. Atribui produtos no perfil do fornecedor primeiro.</p>
+                }
+                else
+                {
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Produto</th>
+                                <th class="num">Preço custo</th>
+                                <th class="num">Desc. %</th>
+                                <th class="num">Quantidade</th>
+                                <th class="num">Subtotal</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var p in fornecedorEscolhido.ProdutosAssociados)
+                            {
+                                var qty = quantidades.GetValueOrDefault(p.ProdutoId, 0);
+                                var subtotal = p.PrecoCusto * qty * (1m - p.DescontoPercentagem / 100m);
+                                <tr>
+                                    <td>
+                                        @p.ProdutoDescricao
+                                        <br /><small><code>@p.ProdutoEan13</code></small>
+                                    </td>
+                                    <td class="num">@p.PrecoCusto.ToString("C", pt)</td>
+                                    <td class="num">@p.DescontoPercentagem.ToString("N1")%</td>
+                                    <td class="num">
+                                        <input type="number" min="0" max="99999" step="1" class="qty"
+                                               value="@qty"
+                                               @onchange="(e) => SetQuantidade(p.ProdutoId, e.Value?.ToString())" />
+                                    </td>
+                                    <td class="num">@subtotal.ToString("C", pt)</td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <th colspan="4" class="num">Total estimado</th>
+                                <th class="num">@TotalEstimado().ToString("C", pt)</th>
+                            </tr>
+                        </tfoot>
+                    </table>
+                }
+            </section>
+        }
+
+        @if (!string.IsNullOrEmpty(error))
+        {
+            <div class="alert alert-danger">@error</div>
+        }
+
+        <div class="form-actions">
+            <button class="btn btn-primary" @onclick="OnSubmit"
+                    disabled="@(busy || fornecedorEscolhido is null || NumLinhas() == 0 || (isAdmin && string.IsNullOrEmpty(lojaIdValue)))">
+                @(busy ? "A criar rascunho..." : "Criar encomenda (rascunho)")
+            </button>
+            <a href="/encomendas" class="btn btn-link">Cancelar</a>
+        </div>
+        <p class="hint">A encomenda fica em <strong>Rascunho</strong>. Para enviar, abre o detalhe e usa "Submeter".</p>
+    }
+</div>
+
+@code {
+    private static readonly System.Globalization.CultureInfo pt =
+        System.Globalization.CultureInfo.GetCultureInfo("pt-PT");
+
+    private List<FornecedorResponse> fornecedoresAtivos = new();
+    private IReadOnlyList<LojaResponse> lojas = Array.Empty<LojaResponse>();
+    private string fornecedorIdValue = "";
+    private string lojaIdValue = "";
+    private Dictionary<Guid, int> quantidades = new();
+
+    private bool isAdmin;
+    private bool loading = true;
+    private bool busy;
+    private string? error;
+
+    private FornecedorResponse? fornecedorEscolhido =>
+        Guid.TryParse(fornecedorIdValue, out var fid)
+            ? fornecedoresAtivos.FirstOrDefault(f => f.Id == fid)
+            : null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthState.GetAuthenticationStateAsync();
+        isAdmin = state.User.IsInRole("AdminCadeia");
+
+        try
+        {
+            fornecedoresAtivos = (await FornecedoresApi.ListAsync())
+                .Where(f => f.Ativo).OrderBy(f => f.Nome).ToList();
+            if (isAdmin)
+            {
+                lojas = await LojasApi.ListAsync();
+            }
+        }
+        catch (Exception ex) { error = ex.Message; }
+        finally { loading = false; }
+    }
+
+    private void SetQuantidade(Guid produtoId, string? value)
+    {
+        if (int.TryParse(value, out var n) && n > 0)
+        {
+            quantidades[produtoId] = n;
+        }
+        else
+        {
+            quantidades.Remove(produtoId);
+        }
+    }
+
+    private int NumLinhas() => quantidades.Count(kv => kv.Value > 0);
+
+    private decimal TotalEstimado()
+    {
+        if (fornecedorEscolhido is null) return 0m;
+        decimal total = 0m;
+        foreach (var p in fornecedorEscolhido.ProdutosAssociados)
+        {
+            var qty = quantidades.GetValueOrDefault(p.ProdutoId, 0);
+            total += p.PrecoCusto * qty * (1m - p.DescontoPercentagem / 100m);
+        }
+        return total;
+    }
+
+    private async Task OnSubmit()
+    {
+        if (fornecedorEscolhido is null) return;
+        busy = true;
+        error = null;
+        try
+        {
+            var linhas = quantidades
+                .Where(kv => kv.Value > 0)
+                .Select(kv => new LinhaEncomendaRequest { ProdutoId = kv.Key, Quantidade = kv.Value })
+                .ToList();
+
+            if (linhas.Count == 0)
+            {
+                error = "Tens de indicar pelo menos uma quantidade.";
+                return;
+            }
+
+            Guid? lojaIdReq = null;
+            if (isAdmin && Guid.TryParse(lojaIdValue, out var pickedLoja))
+            {
+                lojaIdReq = pickedLoja;
+            }
+
+            var result = await EncomendasApi.CreateAsync(new CriarEncomendaRequest
+            {
+                FornecedorId = fornecedorEscolhido.Id,
+                LojaId = lojaIdReq,
+                Linhas = linhas
+            });
+            if (result.Success && result.Value is not null)
+            {
+                Nav.NavigateTo($"/encomendas/{result.Value.Id}");
+            }
+            else
+            {
+                error = MapError(result.ErrorCode, result.StatusCode);
+            }
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private static string MapError(string? code, int status) => code switch
+    {
+        "FORNECEDOR_NAO_ENCONTRADO" => "Fornecedor não existe ou está inativo.",
+        "PRODUTO_NAO_ASSOCIADO" => "Algum dos produtos não está associado a este fornecedor.",
+        "QUANTIDADE_INVALIDA" => "Quantidade tem de ser maior que zero.",
+        "LOJA_OBRIGATORIA" => "Indica a loja destinatária.",
+        null => $"Erro {status}.",
+        _ => code
+    };
+}
+
+<style>
+    .page { max-width: 100%; margin: 24px 0; padding: 0 24px; }
+    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .back-link { color: #1f4ea1; text-decoration: none; }
+    .card { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin-bottom: 16px; }
+    .card h2 { margin-top: 0; font-size: 1.05rem; }
+    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .form-control { padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.95rem; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 8px 10px; border-bottom: 1px solid #eee; text-align: left; vertical-align: middle; }
+    th.num, td.num { text-align: right; }
+    tfoot th { background: #f5f5f7; font-weight: 600; }
+    code { background: #f5f5f7; padding: 1px 4px; border-radius: 3px; font-size: 0.78rem; }
+    small { color: #888; }
+    .qty { width: 80px; padding: 4px 6px; border: 1px solid #ccc; border-radius: 4px; text-align: right; }
+    .form-actions { display: flex; gap: 12px; align-items: center; margin-top: 16px; }
+    .btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem; text-decoration: none; }
+    .btn-primary { background: #1f4ea1; color: white; }
+    .btn-link { background: none; color: #1f4ea1; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .alert-danger { padding: 8px; background: #f8d7da; color: #842029; border-radius: 4px; margin: 12px 0; }
+    .alert-info { padding: 12px; background: #cfe2ff; color: #084298; border-radius: 4px; margin: 12px 0; }
+    .empty { color: #888; font-style: italic; }
+    .hint { color: #888; font-size: 0.85rem; margin-top: 8px; }
+</style>

@@ -1,0 +1,192 @@
+@page "/categorias"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@rendermode InteractiveServer
+@using BeloMercado.Application.Dtos.Catalogo
+@using BeloMercado.BackofficeWeb.Auth
+@using Microsoft.AspNetCore.Components.Authorization
+@inject CategoriasApiClient CategoriasApi
+@inject AuthenticationStateProvider AuthState
+
+<PageTitle>Categorias — Belo Mercado</PageTitle>
+
+<div class="page">
+    <header class="page-header">
+        <h1>Categorias</h1>
+        <a href="/produtos" class="back-link">← Voltar a produtos</a>
+    </header>
+
+    @if (isAdmin)
+    {
+        <section class="form-card">
+            <h2>Nova categoria</h2>
+            <EditForm Model="model" OnValidSubmit="OnSubmit" FormName="categoria">
+                <DataAnnotationsValidator />
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Nome</label>
+                        <InputText @bind-Value="model.Nome" class="form-control" />
+                        <ValidationMessage For="@(() => model.Nome)" />
+                    </div>
+                    <div class="form-group">
+                        <label>Categoria pai (opcional)</label>
+                        <InputSelect @bind-Value="model.ParentValue" class="form-control">
+                            <option value="">— sem categoria pai —</option>
+                            @foreach (var c in categorias.Where(c => c.Ativo).OrderBy(c => c.Nome))
+                            {
+                                <option value="@c.Id">@c.Nome</option>
+                            }
+                        </InputSelect>
+                    </div>
+                    <div class="form-group form-actions">
+                        <button type="submit" class="btn btn-primary" disabled="@busy">
+                            @(busy ? "..." : "Criar")
+                        </button>
+                    </div>
+                </div>
+                @if (!string.IsNullOrEmpty(error))
+                {
+                    <div class="alert alert-danger">@error</div>
+                }
+            </EditForm>
+        </section>
+    }
+
+    <section class="lista">
+        <h2>Existentes</h2>
+        @if (busy && categorias.Count == 0)
+        {
+            <p>A carregar...</p>
+        }
+        else if (categorias.Count == 0)
+        {
+            <p class="empty">Sem categorias.</p>
+        }
+        else
+        {
+            <table>
+                <thead>
+                    <tr>
+                        <th>Nome</th>
+                        <th>Pai</th>
+                        <th>Estado</th>
+                        <th>Criada em</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var c in categorias.OrderBy(c => c.Nome))
+                    {
+                        <tr class="@(c.Ativo ? "" : "row-inactive")">
+                            <td>@c.Nome</td>
+                            <td>@ParentNome(c.ParentCategoriaId)</td>
+                            <td>
+                                <span class="badge @(c.Ativo ? "badge-ok" : "badge-off")">
+                                    @(c.Ativo ? "Ativa" : "Inativa")
+                                </span>
+                            </td>
+                            <td>@c.DataCriacao.ToString("yyyy-MM-dd")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </section>
+</div>
+
+@code {
+    [SupplyParameterFromForm]
+    private FormModel model { get; set; } = new();
+
+    private List<CategoriaResponse> categorias = new();
+    private bool busy;
+    private bool isAdmin;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthState.GetAuthenticationStateAsync();
+        isAdmin = state.User.IsInRole("AdminCadeia");
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        busy = true;
+        try { categorias = (await CategoriasApi.ListAsync()).ToList(); }
+        catch (Exception ex) { error = $"Erro ao carregar: {ex.Message}"; }
+        finally { busy = false; }
+    }
+
+    private async Task OnSubmit()
+    {
+        busy = true;
+        error = null;
+        try
+        {
+            Guid? parent = string.IsNullOrEmpty(model.ParentValue) ? null : Guid.Parse(model.ParentValue);
+            var result = await CategoriasApi.CreateAsync(new CreateCategoriaRequest
+            {
+                Nome = model.Nome,
+                ParentCategoriaId = parent
+            });
+            if (result.Success)
+            {
+                model = new FormModel();
+                await ReloadAsync();
+            }
+            else
+            {
+                error = result.ErrorCode switch
+                {
+                    "NOME_DUPLICADO" => "Já existe uma categoria com este nome.",
+                    "PARENT_NAO_ENCONTRADO" => "Categoria pai não existe.",
+                    null => $"Erro {result.StatusCode}.",
+                    _ => result.ErrorCode
+                };
+            }
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private string ParentNome(Guid? id) =>
+        id is null ? "—" : (categorias.FirstOrDefault(c => c.Id == id)?.Nome ?? id.Value.ToString()[..8]);
+
+    public class FormModel
+    {
+        [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.MaxLength(100)]
+        public string Nome { get; set; } = string.Empty;
+
+        public string ParentValue { get; set; } = "";
+    }
+}
+
+<style>
+    .page { max-width: 100%; margin: 24px 0; padding: 0 24px; }
+    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .back-link { color: #1f4ea1; text-decoration: none; }
+    .form-card, .lista { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin-bottom: 24px; }
+    .form-card h2, .lista h2 { margin-top: 0; font-size: 1.1rem; }
+    .form-row { display: grid; grid-template-columns: 2fr 2fr 1fr; gap: 16px; align-items: end; }
+    .form-group { display: flex; flex-direction: column; }
+    .form-group label { font-weight: 500; margin-bottom: 4px; }
+    .form-control { padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+    .form-actions { justify-content: flex-end; }
+    .btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem; }
+    .btn-primary { background: #1f4ea1; color: white; }
+    .btn:disabled { opacity: 0.6; }
+    .alert-danger { padding: 8px; background: #f8d7da; color: #842029; border-radius: 4px; margin-top: 12px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 8px 10px; border-bottom: 1px solid #eee; text-align: left; }
+    th { background: #f5f5f7; font-weight: 600; }
+    .row-inactive { background: #fafafa; color: #888; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; }
+    .badge-ok { background: #d1e7dd; color: #0f5132; }
+    .badge-off { background: #e9ecef; color: #495057; }
+    .empty { color: #888; font-style: italic; }
+</style>

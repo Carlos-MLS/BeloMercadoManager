@@ -1,0 +1,313 @@
+@page "/venda/{Id:guid}/anular"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@rendermode InteractiveServer
+@using BeloMercado.Application.Dtos.Vendas
+@using BeloMercado.PosWeb.Auth
+@inject VendasApiClient VendasApi
+@inject NavigationManager Nav
+
+<PageTitle>Anular venda — Belo Mercado POS</PageTitle>
+
+<div class="page">
+    <header class="page-header">
+        <h1>Anular / Devolver</h1>
+        <button class="btn-link" @onclick="GoBack">← Voltar</button>
+    </header>
+
+    @if (loading)
+    {
+        <p>A carregar...</p>
+    }
+    else if (venda is null)
+    {
+        <div class="alert alert-warning">Venda não encontrada.</div>
+    }
+    else
+    {
+        <section class="card">
+            <h2>Venda #@venda.Id.ToString()[..8]</h2>
+            <dl class="grid">
+                <dt>Data/hora</dt><dd>@venda.DataHora.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</dd>
+                <dt>Estado</dt><dd><strong>@venda.Estado</strong></dd>
+                <dt>Pagamento</dt><dd>@venda.MetodoPagamento</dd>
+                <dt>Total</dt><dd><strong>@venda.Total.ToString("0.00") €</strong></dd>
+                @if (!string.IsNullOrEmpty(venda.Fatura.NumeroCompleto))
+                {
+                    <dt>Fatura</dt><dd><code>@venda.Fatura.NumeroCompleto</code></dd>
+                }
+                @if (!string.IsNullOrEmpty(venda.Fatura.ClienteNif))
+                {
+                    <dt>Cliente NIF</dt><dd>@venda.Fatura.ClienteNif</dd>
+                }
+            </dl>
+
+            <h3>Linhas</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Produto</th>
+                        <th class="num">Qtd</th>
+                        <th class="num">Já devolvido</th>
+                        <th class="num">Disponível</th>
+                        <th class="num">Preço</th>
+                        @if (CanDevolver)
+                        {
+                            <th class="num">Devolver agora</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var l in venda.Linhas)
+                    {
+                        var disponivel = l.Quantidade - l.QuantidadeDevolvida;
+                        <tr>
+                            <td>
+                                @l.ProdutoDescricao
+                                <br /><small><code>@l.ProdutoEan13</code></small>
+                            </td>
+                            <td class="num">@l.Quantidade</td>
+                            <td class="num">@l.QuantidadeDevolvida</td>
+                            <td class="num">@disponivel</td>
+                            <td class="num">@l.PrecoUnitario.ToString("0.00") €</td>
+                            @if (CanDevolver)
+                            {
+                                <td class="num">
+                                    <input type="number" min="0" max="@disponivel" step="1" class="qty"
+                                           value="@quantidadesDevolucao.GetValueOrDefault(l.Id, 0)"
+                                           @onchange="(e) => SetDevolucao(l.Id, e.Value?.ToString(), disponivel)"
+                                           disabled="@(disponivel == 0)" />
+                                </td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </section>
+
+        @if (!string.IsNullOrEmpty(actionError))
+        {
+            <div class="alert alert-danger">@actionError</div>
+        }
+        @if (!string.IsNullOrEmpty(actionInfo))
+        {
+            <div class="alert alert-info">@actionInfo</div>
+        }
+
+        @if (venda.Estado == "Anulada")
+        {
+            <div class="alert alert-warning">
+                Esta venda já está anulada — não é possível processar mais ações.
+            </div>
+        }
+        else
+        {
+            <section class="actions">
+                <div class="card">
+                    <h3>Anular venda completa</h3>
+                    <p class="hint">
+                        Anula a venda inteira. Stock revertido pela parte ainda não devolvida.
+                        Operadores: até 24h. Gerentes/Admins: sem limite de tempo.
+                    </p>
+                    <textarea class="form-control" rows="2" placeholder="Motivo (obrigatório)"
+                              @bind="motivoAnular"></textarea>
+                    <button class="btn btn-danger" @onclick="AnularAsync"
+                            disabled="@(busy || string.IsNullOrWhiteSpace(motivoAnular))">
+                        @(busy ? "..." : "Anular venda")
+                    </button>
+                </div>
+
+                <div class="card">
+                    <h3>Devolução parcial</h3>
+                    <p class="hint">
+                        Devolve só algumas linhas. Indica acima as quantidades.
+                        Stock incrementa e a venda mantém-se concluída.
+                    </p>
+                    <textarea class="form-control" rows="2" placeholder="Motivo (opcional)"
+                              @bind="motivoDevolucao"></textarea>
+                    <button class="btn btn-warning" @onclick="DevolverAsync"
+                            disabled="@(busy || quantidadesDevolucao.Sum(kv => kv.Value) == 0)">
+                        @(busy ? "..." : $"Devolver {quantidadesDevolucao.Sum(kv => kv.Value)} unidade(s)")
+                    </button>
+                </div>
+            </section>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private VendaResponse? venda;
+    private bool loading = true;
+    private bool busy;
+    private string? actionError;
+    private string? actionInfo;
+
+    private string motivoAnular = "";
+    private string motivoDevolucao = "";
+    private Dictionary<Guid, int> quantidadesDevolucao = new();
+
+    private bool CanDevolver => venda is not null && venda.Estado == "Concluida";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        loading = true;
+        try
+        {
+            venda = await VendasApi.GetByIdAsync(Id);
+            quantidadesDevolucao = new();
+        }
+        catch (Exception ex)
+        {
+            actionError = ex.Message;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private void SetDevolucao(Guid linhaId, string? value, int max)
+    {
+        if (int.TryParse(value, out var n) && n > 0)
+        {
+            quantidadesDevolucao[linhaId] = Math.Min(n, max);
+        }
+        else
+        {
+            quantidadesDevolucao.Remove(linhaId);
+        }
+    }
+
+    private async Task AnularAsync()
+    {
+        busy = true;
+        actionError = null;
+        actionInfo = null;
+        try
+        {
+            var result = await VendasApi.AnularAsync(Id, motivoAnular);
+            if (result.Success)
+            {
+                actionInfo = "Venda anulada. Stock revertido.";
+                await ReloadAsync();
+            }
+            else
+            {
+                actionError = MapError(result.ErrorCode, result.StatusCode);
+            }
+        }
+        catch (Exception ex)
+        {
+            actionError = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task DevolverAsync()
+    {
+        if (venda is null) return;
+        busy = true;
+        actionError = null;
+        actionInfo = null;
+        try
+        {
+            var linhas = quantidadesDevolucao
+                .Where(kv => kv.Value > 0)
+                .Select(kv => new LinhaDevolucaoRequest { LinhaVendaId = kv.Key, Quantidade = kv.Value })
+                .ToList();
+
+            if (linhas.Count == 0)
+            {
+                actionError = "Indica pelo menos uma quantidade a devolver.";
+                return;
+            }
+
+            var result = await VendasApi.DevolucaoAsync(Id, new DevolucaoRequest
+            {
+                Linhas = linhas,
+                Motivo = string.IsNullOrWhiteSpace(motivoDevolucao) ? null : motivoDevolucao
+            });
+            if (result.Success)
+            {
+                actionInfo = "Devolução registada. Stock incrementado.";
+                await ReloadAsync();
+            }
+            else
+            {
+                actionError = MapError(result.ErrorCode, result.StatusCode);
+            }
+        }
+        catch (Exception ex)
+        {
+            actionError = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private void GoBack()
+    {
+        if (venda is not null)
+        {
+            Nav.NavigateTo($"/caixa/{venda.CaixaDiariaId}/vendas");
+        }
+        else
+        {
+            Nav.NavigateTo("/");
+        }
+    }
+
+    private static string MapError(string? code, int status) => code switch
+    {
+        "VENDA_JA_ANULADA" => "Esta venda já estava anulada.",
+        "PRAZO_ANULACAO_EXCEDIDO" => "Operadores só podem anular nas primeiras 24h. Pede ao Gerente.",
+        "MOTIVO_OBRIGATORIO" => "Indica um motivo para anular.",
+        "QUANTIDADE_EXCEDE_DISPONIVEL" => "A quantidade a devolver excede o que está disponível.",
+        "LINHA_NAO_ENCONTRADA" => "Linha não pertence a esta venda.",
+        null => $"Erro {status}.",
+        _ => code
+    };
+}
+
+<style>
+    .page { max-width: 100%; margin: 24px 0; padding: 0 24px; }
+    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .back-link, .btn-link { color: #1f4ea1; background: none; border: none; cursor: pointer; padding: 0; text-decoration: none; }
+    .card { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin-bottom: 16px; }
+    .card h2, .card h3 { margin-top: 0; }
+    .grid { display: grid; grid-template-columns: 160px 1fr; gap: 6px 16px; margin: 12px 0; }
+    dt { font-weight: 500; color: #6c757d; }
+    dd { margin: 0; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 8px 10px; border-bottom: 1px solid #eee; text-align: left; vertical-align: middle; }
+    th.num, td.num { text-align: right; }
+    code { background: #f5f5f7; padding: 1px 4px; border-radius: 3px; font-size: 0.78rem; }
+    small { color: #888; }
+    .qty { width: 70px; padding: 4px 6px; border: 1px solid #ccc; border-radius: 4px; text-align: right; }
+    .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .actions .card .hint { color: #555; font-size: 0.9rem; margin-top: 0; }
+    .form-control { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; margin-bottom: 8px; }
+    .btn { padding: 10px 16px; border-radius: 4px; border: none; cursor: pointer; font-size: 0.95rem; }
+    .btn-danger { background: #dc3545; color: white; }
+    .btn-warning { background: #fd7e14; color: white; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .alert { padding: 10px; border-radius: 4px; margin-bottom: 12px; }
+    .alert-danger { background: #f8d7da; color: #842029; }
+    .alert-warning { background: #fff3cd; color: #664d03; }
+    .alert-info { background: #cfe2ff; color: #084298; }
+    @@media (max-width: 720px) {
+        .actions { grid-template-columns: 1fr; }
+        .grid { grid-template-columns: 1fr; }
+    }
+</style>

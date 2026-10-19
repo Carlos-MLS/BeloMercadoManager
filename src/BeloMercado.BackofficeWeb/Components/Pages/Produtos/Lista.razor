@@ -1,0 +1,215 @@
+@page "/produtos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@rendermode InteractiveServer
+@using BeloMercado.Application.Dtos.Catalogo
+@using BeloMercado.BackofficeWeb.Auth
+@using Microsoft.AspNetCore.Components.Authorization
+@inject ProdutosApiClient ProdutosApi
+@inject CategoriasApiClient CategoriasApi
+@inject AuthenticationStateProvider AuthState
+
+<PageTitle>Produtos — Belo Mercado</PageTitle>
+
+<div class="page">
+    <header class="page-header">
+        <h1>Produtos</h1>
+        <div class="actions">
+            <a href="/" class="back-link">← Voltar</a>
+            <a href="/categorias" class="btn btn-link">Categorias</a>
+            @if (isAdmin)
+            {
+                <a href="/produtos/novo" class="btn btn-primary">+ Novo produto</a>
+            }
+        </div>
+    </header>
+
+    <div class="filters">
+        <input type="search" placeholder="Filtrar por nome ou EAN..." @bind="filtro" @bind:event="oninput" class="form-control" />
+        <select @bind="categoriaFiltro" class="form-control">
+            <option value="">Todas as categorias</option>
+            @foreach (var c in categorias.Where(c => c.Ativo).OrderBy(c => c.Nome))
+            {
+                <option value="@c.Id">@c.Nome</option>
+            }
+        </select>
+        <label class="check">
+            <input type="checkbox" @bind="mostrarInativos" /> Mostrar inativos
+        </label>
+    </div>
+
+    @if (!string.IsNullOrEmpty(error))
+    {
+        <div class="alert alert-danger">@error</div>
+    }
+    @if (!string.IsNullOrEmpty(info))
+    {
+        <div class="alert alert-info">@info</div>
+    }
+
+    @if (busy)
+    {
+        <p>A carregar...</p>
+    }
+    else if (Filtrados().Count == 0)
+    {
+        <p class="empty">Sem produtos para os filtros aplicados.</p>
+    }
+    else
+    {
+        <table>
+            <thead>
+                <tr>
+                    <th>EAN</th>
+                    <th>Nome</th>
+                    <th>Categoria</th>
+                    <th class="num">Preço</th>
+                    <th>IVA</th>
+                    <th>Unidade</th>
+                    <th>Estado</th>
+                    @if (isAdmin) { <th></th> }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var p in Filtrados())
+                {
+                    <tr class="@(p.Ativo ? "" : "row-inactive")">
+                        <td><code>@p.Ean13</code></td>
+                        <td>@p.Descricao</td>
+                        <td>@p.CategoriaNome</td>
+                        <td class="num">@p.Preco.ToString("C", pt)</td>
+                        <td>@p.TaxaIva (@p.TaxaIvaPercentagem%)</td>
+                        <td>@p.UnidadeMedida</td>
+                        <td>
+                            <span class="badge @(p.Ativo ? "badge-ok" : "badge-off")">
+                                @(p.Ativo ? "Ativo" : "Inativo")
+                            </span>
+                        </td>
+                        @if (isAdmin)
+                        {
+                            <td class="actions-cell">
+                                <a href="@($"/produtos/{p.Id}")" class="btn btn-link">Editar</a>
+                                @if (p.Ativo)
+                                {
+                                    <button class="btn btn-link btn-danger" @onclick="() => DeactivateAsync(p)">
+                                        Desativar
+                                    </button>
+                                }
+                            </td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@code {
+    private static readonly System.Globalization.CultureInfo pt =
+        System.Globalization.CultureInfo.GetCultureInfo("pt-PT");
+
+    private List<ProdutoResponse> produtos = new();
+    private IReadOnlyList<CategoriaResponse> categorias = Array.Empty<CategoriaResponse>();
+    private string filtro = "";
+    private string categoriaFiltro = "";
+    private bool mostrarInativos;
+    private bool busy = true;
+    private bool isAdmin;
+    private string? error;
+    private string? info;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthState.GetAuthenticationStateAsync();
+        isAdmin = state.User.IsInRole("AdminCadeia");
+
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        busy = true;
+        error = null;
+        try
+        {
+            var prodTask = ProdutosApi.ListAsync();
+            var catTask = CategoriasApi.ListAsync();
+            await Task.WhenAll(prodTask, catTask);
+            produtos = prodTask.Result.OrderBy(p => p.Descricao).ToList();
+            categorias = catTask.Result;
+        }
+        catch (Exception ex)
+        {
+            error = $"Erro ao carregar: {ex.Message}";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private List<ProdutoResponse> Filtrados()
+    {
+        IEnumerable<ProdutoResponse> q = produtos;
+
+        if (!mostrarInativos) q = q.Where(p => p.Ativo);
+
+        if (!string.IsNullOrWhiteSpace(filtro))
+        {
+            var f = filtro.Trim();
+            q = q.Where(p =>
+                p.Descricao.Contains(f, StringComparison.OrdinalIgnoreCase) ||
+                p.Ean13.Contains(f, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (Guid.TryParse(categoriaFiltro, out var catId))
+        {
+            q = q.Where(p => p.CategoriaId == catId);
+        }
+
+        return q.ToList();
+    }
+
+    private async Task DeactivateAsync(ProdutoResponse p)
+    {
+        info = null;
+        error = null;
+        var result = await ProdutosApi.DeactivateAsync(p.Id);
+        if (result.Success)
+        {
+            info = $"Produto {p.Descricao} desativado.";
+            await ReloadAsync();
+        }
+        else
+        {
+            error = $"Falha ao desativar: {result.ErrorCode ?? result.StatusCode.ToString()}";
+        }
+    }
+}
+
+<style>
+    .page { max-width: 100%; margin: 24px 0; padding: 0 24px; }
+    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .actions { display: flex; gap: 12px; align-items: center; }
+    .back-link { color: #1f4ea1; text-decoration: none; }
+    .filters { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+    .filters .form-control { padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; flex: 0 0 auto; }
+    .filters input[type=search] { flex: 1 1 280px; min-width: 220px; }
+    .check { display: flex; gap: 6px; align-items: center; font-size: 0.9rem; color: #555; }
+    .btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem; text-decoration: none; }
+    .btn-primary { background: #1f4ea1; color: white; }
+    .btn-link { background: none; color: #1f4ea1; padding: 4px 8px; }
+    .btn-danger { color: #b02a37; }
+    .alert-danger { padding: 8px; background: #f8d7da; color: #842029; border-radius: 4px; margin-bottom: 12px; }
+    .alert-info { padding: 8px; background: #cfe2ff; color: #084298; border-radius: 4px; margin-bottom: 12px; }
+    table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; }
+    th, td { padding: 10px 12px; border-bottom: 1px solid #eee; text-align: left; }
+    th { background: #f5f5f7; font-weight: 600; }
+    th.num, td.num { text-align: right; }
+    code { background: #f5f5f7; padding: 2px 6px; border-radius: 4px; font-size: 0.85rem; }
+    .row-inactive { background: #fafafa; color: #888; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; }
+    .badge-ok { background: #d1e7dd; color: #0f5132; }
+    .badge-off { background: #e9ecef; color: #495057; }
+    .actions-cell { display: flex; gap: 4px; }
+    .empty { color: #888; font-style: italic; }
+</style>

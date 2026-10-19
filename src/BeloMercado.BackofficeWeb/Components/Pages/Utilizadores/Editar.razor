@@ -1,0 +1,248 @@
+@page "/utilizadores/novo"
+@page "/utilizadores/{Id:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "AdminCadeia,AdminIT")]
+@rendermode InteractiveServer
+@using BeloMercado.Application.Dtos.Utilizadores
+@using BeloMercado.Application.Dtos.Lojas
+@using BeloMercado.BackofficeWeb.Auth
+@using BeloMercado.Domain.Enums
+@inject UtilizadoresApiClient UtilizadoresApi
+@inject LojasApiClient LojasApi
+@inject NavigationManager Nav
+
+<PageTitle>@(IsNew ? "Novo utilizador" : "Editar utilizador") — Belo Mercado</PageTitle>
+
+<div class="page">
+    <header class="page-header">
+        <h1>@(IsNew ? "Novo utilizador" : "Editar utilizador")</h1>
+        <a href="/utilizadores" class="back-link">← Voltar à lista</a>
+    </header>
+
+    @if (loading)
+    {
+        <p>A carregar...</p>
+    }
+    else
+    {
+        <EditForm Model="model" OnValidSubmit="OnSubmit" FormName="utilizador">
+            <DataAnnotationsValidator />
+
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Nome</label>
+                    <InputText @bind-Value="model.Nome" class="form-control" />
+                    <ValidationMessage For="@(() => model.Nome)" />
+                </div>
+
+                <div class="form-group">
+                    <label>Email</label>
+                    @if (IsNew)
+                    {
+                        <InputText @bind-Value="model.Email" class="form-control" type="email" />
+                        <ValidationMessage For="@(() => model.Email)" />
+                    }
+                    else
+                    {
+                        <input class="form-control" value="@model.Email" disabled />
+                        <small class="hint">O email não pode ser alterado.</small>
+                    }
+                </div>
+
+                <div class="form-group">
+                    <label>Perfil</label>
+                    <InputSelect @bind-Value="model.Perfil" class="form-control">
+                        @foreach (var p in Enum.GetValues<Perfil>())
+                        {
+                            <option value="@p">@p</option>
+                        }
+                    </InputSelect>
+                </div>
+
+                <div class="form-group">
+                    <label>Loja</label>
+                    <InputSelect @bind-Value="model.LojaIdValue" class="form-control">
+                        <option value="">— sem loja (admin/IT) —</option>
+                        @foreach (var loja in lojas)
+                        {
+                            <option value="@loja.Id">@loja.Designacao</option>
+                        }
+                    </InputSelect>
+                    <small class="hint">Operadores e gerentes precisam de loja. Admin/IT podem ficar sem.</small>
+                </div>
+
+                @if (!IsNew)
+                {
+                    <div class="form-group form-check">
+                        <label>
+                            <InputCheckbox @bind-Value="model.Ativo" /> Ativo
+                        </label>
+                    </div>
+                }
+            </div>
+
+            @if (!string.IsNullOrEmpty(error))
+            {
+                <div class="alert alert-danger">@error</div>
+            }
+            @if (!string.IsNullOrEmpty(temporaryPassword))
+            {
+                <div class="alert alert-info">
+                    <strong>Utilizador criado.</strong> Password temporária: <code>@temporaryPassword</code>
+                    <br /><small>Comunica-a ao utilizador. No primeiro login será obrigado a alterá-la.</small>
+                </div>
+            }
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary" disabled="@busy">
+                    @(busy ? "A guardar..." : (IsNew ? "Criar" : "Guardar"))
+                </button>
+                <a href="/utilizadores" class="btn btn-link">Cancelar</a>
+            </div>
+        </EditForm>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+
+    private bool IsNew => Id is null;
+
+    [SupplyParameterFromForm]
+    private FormModel model { get; set; } = new();
+
+    private IReadOnlyList<LojaResponse> lojas = Array.Empty<LojaResponse>();
+    private bool loading = true;
+    private bool busy;
+    private string? error;
+    private string? temporaryPassword;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { lojas = await LojasApi.ListAsync(); }
+        catch { /* lista vazia se API offline */ }
+
+        if (!IsNew)
+        {
+            var existing = (await UtilizadoresApi.ListAsync()).FirstOrDefault(u => u.Id == Id);
+            if (existing is null)
+            {
+                error = "Utilizador não encontrado.";
+            }
+            else
+            {
+                model.Nome = existing.Nome;
+                model.Email = existing.Email;
+                model.Perfil = Enum.TryParse<Perfil>(existing.Perfil, out var p) ? p : Perfil.OperadorCaixa;
+                model.LojaIdValue = existing.LojaId?.ToString() ?? "";
+                model.Ativo = existing.Ativo;
+            }
+        }
+        loading = false;
+    }
+
+    private async Task OnSubmit()
+    {
+        busy = true;
+        error = null;
+        temporaryPassword = null;
+        try
+        {
+            Guid? lojaId = string.IsNullOrEmpty(model.LojaIdValue)
+                ? null
+                : Guid.Parse(model.LojaIdValue);
+
+            if (IsNew)
+            {
+                var result = await UtilizadoresApi.CreateAsync(new CreateUtilizadorRequest
+                {
+                    Nome = model.Nome,
+                    Email = model.Email,
+                    Perfil = model.Perfil,
+                    LojaId = lojaId
+                });
+                if (result.Success && result.Value is not null)
+                {
+                    temporaryPassword = result.Value.TemporaryPassword;
+                    model = new FormModel(); // limpa para próximo
+                }
+                else
+                {
+                    error = MapError(result.ErrorCode, result.StatusCode);
+                }
+            }
+            else
+            {
+                var result = await UtilizadoresApi.UpdateAsync(Id!.Value, new UpdateUtilizadorRequest
+                {
+                    Nome = model.Nome,
+                    Perfil = model.Perfil,
+                    LojaId = lojaId,
+                    Ativo = model.Ativo
+                });
+                if (result.Success)
+                {
+                    Nav.NavigateTo("/utilizadores");
+                }
+                else
+                {
+                    error = MapError(result.ErrorCode, result.StatusCode);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private static string MapError(string? code, int status) => code switch
+    {
+        "EMAIL_EXISTS" => "Já existe um utilizador com este email.",
+        "PERFIL_REQUER_LOJA" => "Operadores e gerentes têm de ter loja atribuída.",
+        "LOJA_NAO_ENCONTRADA" => "Loja indicada não existe.",
+        "UTILIZADOR_NAO_ENCONTRADO" => "Utilizador não encontrado.",
+        null => $"Erro {status}.",
+        _ => code
+    };
+
+    public class FormModel
+    {
+        [System.ComponentModel.DataAnnotations.Required]
+        [System.ComponentModel.DataAnnotations.MaxLength(100)]
+        public string Nome { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.EmailAddress]
+        [System.ComponentModel.DataAnnotations.MaxLength(255)]
+        public string Email { get; set; } = string.Empty;
+
+        public Perfil Perfil { get; set; } = Perfil.OperadorCaixa;
+
+        public string LojaIdValue { get; set; } = "";
+
+        public bool Ativo { get; set; } = true;
+    }
+}
+
+<style>
+    .page { max-width: 100%; margin: 24px 0; padding: 0 24px; }
+    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .back-link { color: #1f4ea1; text-decoration: none; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 20px; }
+    .form-group { display: flex; flex-direction: column; }
+    .form-group.form-check { grid-column: 1 / -1; }
+    .form-group label { font-weight: 500; margin-bottom: 4px; }
+    .form-control { padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+    .hint { color: #888; font-size: 0.8rem; margin-top: 4px; }
+    .form-actions { display: flex; gap: 12px; align-items: center; margin-top: 16px; }
+    .btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem; text-decoration: none; }
+    .btn-primary { background: #1f4ea1; color: white; }
+    .btn-link { background: none; color: #1f4ea1; }
+    .btn:disabled { opacity: 0.6; }
+    .alert-danger { padding: 8px; background: #f8d7da; color: #842029; border-radius: 4px; margin: 12px 0; }
+    .alert-info { padding: 12px; background: #cfe2ff; color: #084298; border-radius: 4px; margin: 12px 0; }
+    .alert-info code { background: rgba(0,0,0,0.06); padding: 2px 6px; border-radius: 4px; font-size: 1rem; }
+</style>

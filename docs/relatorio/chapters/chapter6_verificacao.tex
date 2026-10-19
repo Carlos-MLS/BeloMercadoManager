@@ -1,0 +1,346 @@
+%==========================================================================
+% CAPÍTULO 6 — Verificação, Validação e Avaliação da Qualidade do Software Produzido
+%==========================================================================
+\chapter{Verificação, Validação e Avaliação da Qualidade do Software Produzido}
+
+    De forma a garantir que o sistema produzido cumpre os requisitos especificados e atende aos padrões de qualidade esperados foram realizados uma série de testes para \textbf{verificação} (\textit{``estamos a construir o produto corretamente?''}) e a \textbf{validação} (\textit{``estamos a construir o produto certo?''}) do Belo Mercado Manager.
+
+    Foram abrangidas cinco linhas de atividade complementares: a definição de uma estratégia de testes em três níveis (unitário, integração e sistema/aceitação); a geração assistida por LLM dos respetivos testes automáticos, com técnicas dirigidas a \textit{test cases}, \textit{edge cases} e testes baseados em requisitos; a verificação da satisfação dos requisitos do SRS através de uma matriz de rastreabilidade; a recolha de métricas de cobertura de código; e a avaliação do produto à luz do modelo de qualidade ISO/IEC~25010.
+
+%--------------------------------------------------------------------------
+\section{Estratégia de Testes}
+%--------------------------------------------------------------------------
+
+    Seguindo a recomendação da norma IEEE/ISO/IEC~29119 para projetos de dimensão semelhante, optou-se por uma estratégia de testes em três níveis complementares, cada um codificado num projeto independente da solução \texttt{BeloMercadoManager.sln}.
+
+    Os \textit{testes unitários} verificam classes isoladas (validadores, serviços, tipos transversais) substituindo as dependências externas por \textit{fakes} e repositórios em memória reutilizáveis.
+
+    Os \textit{testes de integração} exercitam a interação entre serviço, repositório e \textit{DbContext} usando o \textit{provider} \texttt{Entity~Framework~Core~InMemory} com as implementações reais da camada de \textit{Infrastructure}.
+
+    Por fim, os \textit{testes de sistema/aceitação} codificam, em formato \textit{Given/When/Then}, os critérios de aceitação dos casos de uso descritos no Capítulo~3.
+
+    A nomenclatura uniforme \texttt{Metodo\_Cenario\_Expectativa} foi adotada em todos os testes, complementada nos testes de aceitação por um comentário XML estruturado em \textit{Given/When/Then} para garantir legibilidade ao revisor não técnico. Para suportar testes sobre regras dependentes do tempo, como a expiração de \textit{lockout} de utilizador (UC15), a idade-limite de venda para anulação (UC02) ou o \textit{trigger} temporal da consolidação (UC12), foi introduzido o serviço \texttt{IClock}, injetado por DI: em produção a sua implementação é \texttt{ShiftableClock} e, em testes, \texttt{FakeClock}, com tempo manualmente controlado.
+
+    A Tabela~\ref{tab:stack_testes} resume a \textit{stack} tecnológica adotada.
+
+    \begin{table}[H]
+    \centering
+    \small
+    \begin{tabular}{|l|p{9cm}|}
+    \hline
+    \textbf{Ferramenta} & \textbf{Função} \\
+    \hline
+    xUnit 2.9 & \textit{Framework} de testes (\texttt{[Fact]}, \texttt{[Theory]}). \\
+    \hline
+    FluentAssertions 6.12 & Asserções legíveis e mensagens descritivas. \\
+    \hline
+    Moq 4.20 & \textit{Mocks} quando há que verificar interações. \\
+    \hline
+    EF Core InMemory 8.0.10 & \textit{Provider} em memória para testes de integração. \\
+    \hline
+    coverlet.collector 6.0.2 & Recolha de cobertura (Cobertura/OpenCover). \\
+    \hline
+    Microsoft.NET.Test.Sdk 17.11.1 & \textit{Runner} integrado em \texttt{dotnet test}. \\
+    \hline
+    \end{tabular}
+    \caption{\textit{Stack} tecnológica de testes.}
+    \label{tab:stack_testes}
+    \end{table}
+
+    \begin{tcolorbox}[title=Interação com o LLM]
+    \textbf{Prompt utilizado}
+
+    Como podemos estruturar a fase de testes deste projeto, sabendo que temos uma equipa pequena, um prazo apertado e a necessidade de demonstrar cobertura sobre os casos de uso na defesa? Que níveis de teste fazem sentido e que ferramentas do ecossistema .NET recomendas?
+
+    \tcblower
+
+    \textbf{Análise crítica}
+
+    A resposta inicial do LLM propôs uma divisão em quatro projetos (Unit, Integration, Functional, E2E) inspirada em literatura mais orientada a microsserviços. Para o contexto académico, e dado o tamanho da equipa, fundiu-se \textit{Functional} e \textit{E2E} numa única designação \textit{Acceptance}, resultando em três projetos, uma divisão mais alinhada à norma IEEE~29119 e mais simples de operacionalizar em \texttt{dotnet test}.
+
+    Mantiveram-se as sugestões de xUnit e FluentAssertions, já \textit{standard} no ecossistema, e descartou-se a proposta de SpecFlow/Gherkin por não acrescentar valor sobre comentários XML \textit{Given/When/Then} e por exigir um \textit{runner} adicional que dificultaria a integração em CI no futuro.
+    \end{tcolorbox}
+
+%--------------------------------------------------------------------------
+\section{Testes Unitários}
+%--------------------------------------------------------------------------
+
+    Foi testada a lógica de domínio isolada das dependências de infraestrutura. O alvo desta camada são as classes que contêm regras de negócio puras como validadores, serviços de aplicação e tipos transversais utilizados ao longo da camada de Application, garantindo que cada uma se comporta corretamente perante todas as combinações relevantes de \textit{input}, sem necessidade de base de dados nem da API HTTP estarem ativas.
+
+    A abordagem geral consiste em (i)~instanciar a classe sob teste com as suas dependências substituídas por \textit{fakes} ou implementações em memória; (ii)~preparar o estado inicial; (iii)~executar o método; e (iv)~afirmar tanto sobre o valor devolvido como sobre o estado final dos colaboradores. Recorre-se intensamente a testes parametrizados para condensar dezenas de casos de equivalência numa única assinatura de teste, e aplicaram-se sistematicamente as técnicas de \textit{equivalence partitioning} e \textit{boundary value analysis} sobre as fronteiras numéricas e temporais identificadas no SRS.
+
+    A título ilustrativo, o teste do validador de NIF expõe o algoritmo \textit{mod-11} a quatro famílias de \textit{inputs}: NIFs válidos conhecidos, comprimentos incorretos, caracteres não-numéricos e \textit{check digits} incorretos. Cada família é coberta por um \texttt{[Theory]} parametrizado, totalizando cerca de duas dezenas de asserções numa única classe de teste de poucas linhas. Padrões equivalentes foram aplicados ao validador de EAN-13 e à política de complexidade de \textit{passwords} (UC17).
+
+    \begin{tcolorbox}[title=Interação com o LLM]
+    \textbf{Prompt utilizado}
+
+    Como devo abordar a escrita de testes unitários para os serviços de aplicação deste projeto? Tenho regras de negócio espalhadas por vários \textit{services} e quero ter a certeza de que estou a cobrir não só os caminhos felizes mas também os ramos de erro e as fronteiras numéricas e temporais relevantes.
+
+    \tcblower
+
+    \textbf{Análise crítica}
+
+    A geração inicial cobriu rapidamente os fluxos felizes mas omitiu vários ramos defensivos, como o ramo \texttt{ProdutoInativo} do \texttt{SalesService} ou a transição \texttt{Submetida~$\to$~Recebida~parcial} do \texttt{ProcurementService}. Foi necessário um segundo \textit{pass} com o \textit{prompt} reforçado (``para cada \texttt{return} do método, garante que existe pelo menos um teste que o atinge'').
+
+    Adicionalmente, o LLM por vezes usou nomes de \textit{enum} ou \textit{error codes} inexistentes (por exemplo, \texttt{MetodoPagamento.Multibanco} em vez do correto \texttt{MetodoPagamento.Cartao}); estes erros foram detetados em compilação e corrigidos em \textit{batch}. A maior correção semântica foi o teste do NIF \texttt{"000000000"}, descrita adiante.
+    \end{tcolorbox}
+
+%--------------------------------------------------------------------------
+\section{Testes de Integração}
+%--------------------------------------------------------------------------
+
+    Foi testada a interação entre as várias camadas do sistema (serviço, repositório e \texttt{DbContext}) sem substituir nenhuma delas por \textit{mocks}. O alvo desta camada são os cenários em que o comportamento correto depende não só da lógica de cada classe, mas também da forma como o \textit{Entity Framework} traduz operações em alterações persistidas e como os \textit{tracking changes} se propagam ao chamar \texttt{SaveChangesAsync}.
+
+    A abordagem assenta numa \textit{fixture} reutilizável (\texttt{IntegrationTestFixture}) que constrói um \texttt{DbContext} sobre o \textit{provider} EF~Core~InMemory, com nome de base único por teste, e instancia os repositórios concretos da camada de Infrastructure, o \texttt{UnitOfWork} real, e os serviços de Application sobre essa cadeia. Cada teste prepara dados, executa uma sequência de operações de negócio e verifica o estado final diretamente nos \texttt{DbSet} do contexto.
+
+    A título ilustrativo, o cenário mais representativo testa o ciclo completo de um dia de operação numa loja: abrir caixa, registar várias vendas, fechar caixa e disparar a consolidação imediata associada (UC04, UC01 e UC12). No final, o teste verifica que o estado da caixa transitou para \textit{Fechada}, que a numeração de faturas foi sequencial, que o \textit{stock} desceu na proporção correta e que o registo de KPIs diários foi materializado pela consolidação. Esta combinação cruza três casos de uso num só teste e dá garantias que nenhum dos níveis isoladamente conseguiria.
+
+    \begin{tcolorbox}[title=Interação com o LLM]
+    \textbf{Prompt utilizado}
+
+    Como posso testar fluxos que atravessam vários serviços e tocam na base de dados sem depender de uma instância SQL Server real? Quero ter a certeza de que aquilo que o serviço descreve em código corresponde ao que efetivamente fica persistido depois de \texttt{SaveChangesAsync}.
+
+    \tcblower
+
+    \textbf{Análise crítica}
+
+    A \textit{fixture} gerada na primeira iteração assumia uma assinatura desatualizada da \texttt{IConsolidacaoRepository}, chamando um \texttt{ListPendingForRetryAsync} que não existia (o nome correto é \texttt{GetPendingAsync}). Este desfasamento entre o que o LLM \textit{lembra} e a interface real foi a fonte de erro mais frequente durante toda a etapa, e o seu padrão é instrutivo: o modelo tende a inventar APIs plausíveis quando não tem o ficheiro carregado em contexto.
+
+    A mitigação adotada foi fornecer sempre ao LLM as interfaces relevantes antes de pedir a implementação. Um teste falhou ainda de forma intermitente por ordenar duas entradas de \texttt{HistoricoPreco} pelo \textit{timestamp}, que coincidia porque o \texttt{FakeClock} não avançava entre as operações; reescreveu-se a asserção para verificar \textit{existência} do novo preço em vez de ordem temporal.
+    \end{tcolorbox}
+
+%--------------------------------------------------------------------------
+\section{Verificação da Satisfação dos SRS}
+\label{sec:cap6_srs}
+%--------------------------------------------------------------------------
+
+    A verificação do cumprimento dos requisitos foi formalizada numa matriz de rastreabilidade, cuja versão exaustiva está disponibilizada em \texttt{docs/testes/matriz-srs.md}, que liga cada Requisito Funcional ao seu caso de uso e aos testes automáticos que o validam. A Tabela~\ref{tab:srs_cobertura} resume a cobertura por UC.
+
+    \begin{table}[H]
+    \centering
+    \small
+    \begin{tabular}{|p{6cm}|c|c|c|}
+    \hline
+    \textbf{UC} & \textbf{RFs definidos} & \textbf{RFs cobertos} & \textbf{\%} \\
+    \hline
+    UC01 --- Registar Venda             & 10 & 10 & 100\,\% \\
+    \hline
+    UC02 --- Anular/Devolver Venda      & 5  & 5  & 100\,\% \\
+    \hline
+    UC03 --- Aplicar Promoção           & 4  & 4  & 100\,\% \\
+    \hline
+    UC04 --- Gerir Caixa Diária         & 6  & 6  & 100\,\% \\
+    \hline
+    UC05 --- Gerir Catálogo             & 6  & 6  & 100\,\% \\
+    \hline
+    UC06 --- Gerir Stock                & 3  & 3  & 100\,\% \\
+    \hline
+    UC09 --- Gerir Fornecedores         & 3  & 3  & 100\,\% \\
+    \hline
+    UC10 --- Gerir Encomendas           & 3  & 3  & 100\,\% \\
+    \hline
+    UC11 --- Rececionar Encomenda       & 4  & 4  & 100\,\% \\
+    \hline
+    UC12 --- Consolidação Diária        & 5  & 5  & 100\,\% \\
+    \hline
+    UC15 --- Autenticar                 & 6  & 6  & 100\,\% \\
+    \hline
+    UC16 --- Administrar Utilizadores   & 5  & 5  & 100\,\% \\
+    \hline
+    UC17 --- Atualizar Perfil           & 5  & 5  & 100\,\% \\
+    \hline
+    UC19 --- Gerir Lojas                & 3  & 3  & 100\,\% \\
+    \hline
+    \textbf{Total}                      & \textbf{68} & \textbf{68} & \textbf{100\,\%} \\
+    \hline
+    \end{tabular}
+    \caption{Cobertura dos Requisitos Funcionais por caso de uso.}
+    \label{tab:srs_cobertura}
+    \end{table}
+
+    Os casos de uso UC07, UC08, UC14 e UC18 foram excluídos do âmbito conforme as decisões arquiteturais documentadas no Capítulo~4; por essa razão não constam desta matriz. Os Requisitos Não Funcionais com manifestação comportamental observável foram igualmente testados: BCrypt para \textit{password hashing} (RNF-09), comportamento \textit{timing-safe} no \textit{login}, \textit{lockout} após 5 falhas (RNF-08), atomicidade ACID das escritas via \texttt{IUnitOfWork} (RNF-06) e \textit{audit trail} universal das operações de estado.
+
+    \begin{tcolorbox}[title=Interação com o LLM]
+    \textbf{Prompt utilizado}
+
+    Como demonstro de forma objetiva que cada requisito funcional definido no Capítulo~3 está, de facto, validado por pelo menos um teste automático? Que estrutura de rastreabilidade me permite responder rapidamente à pergunta ``este RF está coberto ou não?''.
+
+    \tcblower
+
+    \textbf{Análise crítica}
+
+    A matriz produzida foi pormenorizada mas continha algumas omissões que só foram detetadas por contraprova: o modelo classificou como ``coberto'' um RF cujo único teste cobria a precondição mas não o pós-condição. Refinou-se o critério de cobertura para exigir um teste com asserção explícita sobre o pós-estado, e revisou-se toda a matriz.
+
+    A versão final, ainda presente em \texttt{docs/testes/matriz-srs.md}, usa este critério mais estrito, e por isso o resultado de 100\% tem um significado mais operacional do que apenas ``existe um teste que toca este RF''.
+    \end{tcolorbox}
+
+%--------------------------------------------------------------------------
+\section{Testes de Aceitação e Análise da Qualidade}
+%--------------------------------------------------------------------------
+
+    Foram testados os critérios de aceitação documentados em cada caso de uso, na perspetiva do ator que dispara o fluxo. O alvo desta camada não é a correção interna de uma classe nem a coerência transversal das camadas, mas sim a satisfação dos requisitos tal como o utilizador os experimenta: ``dada esta pré-condição, quando o utilizador faz X, o sistema responde com Y''.
+
+    A abordagem segue o formato \textit{Given/When/Then}: cada teste tem um comentário XML em prosa portuguesa que descreve o cenário de aceitação, seguido de código que reproduz esse cenário sobre a mesma \textit{fixture} dos testes de integração. Cada UC contemplado tem um teste para o fluxo principal documentado e, sempre que aplicável, um teste por fluxo alternativo. A Tabela~\ref{tab:aceitacao_por_uc} sumariza os cenários cobertos.
+
+    \begin{table}[H]
+    \centering
+    \small
+    \begin{tabular}{|p{3.5cm}|p{9cm}|}
+    \hline
+    \textbf{UC} & \textbf{Cenários cobertos} \\
+    \hline
+    UC01 --- Registar Venda & Principal; sem caixa aberta; \textit{stock} insuficiente; \textit{retry} com \texttt{Idempotency-Key} duplicada. \\
+    \hline
+    UC02 --- Anular/Devolver & Anular recente; anular tardia sem perfil Gerente; devolução parcial. \\
+    \hline
+    UC04 --- Gerir Caixa & Abrir/fechar normal; diferença $>$ 10~\euro\ sem justificação; segunda caixa no mesmo dia. \\
+    \hline
+    UC05 --- Gerir Catálogo & Criar com EAN-13 válido; EAN-13 inválido; alteração de preço materializa histórico. \\
+    \hline
+    UC15 --- Autenticar & \textit{Login} válido; anti-\textit{enumeration}; \textit{lockout} após 5 falhas; \textit{refresh rotation}. \\
+    \hline
+    \end{tabular}
+    \caption{Testes de aceitação codificados, por caso de uso.}
+    \label{tab:aceitacao_por_uc}
+    \end{table}
+
+    A título ilustrativo, o teste do fluxo principal do UC01 (Registar Venda) coloca uma loja com produto em \textit{stock} e caixa aberta como pré-condição, simula o operador a finalizar uma venda em numerário com troco como ação, e verifica simultaneamente o estado da venda, o número sequencial da fatura emitida, o valor do troco devolvido, o decremento do \textit{stock} e a presença do evento de auditoria \texttt{VENDA\_FINALIZADA}, cobrindo num único teste todas as cláusulas \textit{Then} documentadas no caso de uso.
+
+    A escolha de cobrir prioritariamente UC01, UC02, UC04, UC05 e UC15 em formato de aceitação reflete o peso destes UCs na operação diária (POS) e o seu carácter mais transacional e sensível. Os restantes UCs em âmbito ficam cobertos por testes unitários e de integração que validam as mesmas regras de negócio, conforme a matriz de rastreabilidade da Secção~\ref{sec:cap6_srs}.
+
+    \begin{tcolorbox}[title=Interação com o LLM]
+    \textbf{Prompt utilizado}
+
+    Como traduzo os fluxos descritos nos casos de uso do Capítulo~3 em testes automáticos que sirvam ao mesmo tempo de validação para o cliente e de \textit{checklist} de aceitação para a equipa? Que formato torna esses testes legíveis sem perder rigor técnico?
+
+    \tcblower
+
+    \textbf{Análise crítica}
+
+    Para esta secção o LLM revelou-se especialmente produtivo: a estrutura repetitiva dos testes \textit{Given/When/Then} é exatamente o tipo de tarefa em que se ganha velocidade sem perda de qualidade. A principal correção foi de coesão entre o que o \textit{summary} dizia e o que a asserção verificava: em alguns testes a frase ``o sistema recusa'' não tinha asserção correspondente a verificar a recusa, apenas verificava o estado ausente. Reforçou-se a regra de que cada cláusula \textit{Then} em prosa tem de mapear a uma asserção concreta.
+
+    Os testes mais difíceis foram os de \textit{retry} idempotente (UC01, fluxo alternativo) porque exigem que a \textit{fixture} mantenha estado entre as duas chamadas ao serviço; o LLM tinha tendência a recriar a \textit{fixture} entre elas, o que invalidava o teste.
+    \end{tcolorbox}
+
+    Tendo as três \textit{suites} de testes garantidas, importa em seguida medir que percentagem do código de produção é efetivamente exercitada pela sua execução. Essa medição é feita com o \texttt{coverlet.collector}, configurado em \texttt{tests/coverage.runsettings} para excluir os próprios projetos de teste, o ficheiro de arranque \texttt{Program.cs}, os ficheiros de \textit{migrations} gerados pelo EF~Core e elementos marcados com \texttt{[GeneratedCode]} ou \texttt{[CompilerGenerated]}. O comando para reproduzir o relatório em formato HTML é:
+
+    \begin{quote}\ttfamily\small
+    dotnet test BeloMercadoManager.sln \textbackslash\\
+    \hspace*{2em}--settings tests/coverage.runsettings\\
+    reportgenerator -reports:**/coverage.cobertura.xml \textbackslash\\
+    \hspace*{2em}-targetdir:tests/coverage-report -reporttypes:Html
+    \end{quote}
+
+    A Tabela~\ref{tab:cobertura_componente} apresenta os valores observados localmente, em execução sobre a \textit{branch} \texttt{main}.
+
+    \begin{table}[H]
+    \centering
+    \small
+    \begin{tabular}{|p{8cm}|c|}
+    \hline
+    \textbf{Componente} & \textbf{Cobertura} \\
+    \hline
+    \texttt{Common.Validation.PasswordPolicy}  & 100\,\% \\
+    \hline
+    \texttt{Common.Validation.NifValidator}    & 100\,\% \\
+    \hline
+    \texttt{Common.Validation.Ean13Validator}  & 100\,\% \\
+    \hline
+    \texttt{Common.OperationResult<T>}         & 100\,\% \\
+    \hline
+    \texttt{Services.AuthAccessService}        & $\approx$ 92\,\% \\
+    \hline
+    \texttt{Services.SalesService}             & $\approx$ 85\,\% \\
+    \hline
+    \texttt{Services.CatalogService}           & $\approx$ 88\,\% \\
+    \hline
+    \texttt{Services.StoreManagementService}   & $\approx$ 85\,\% \\
+    \hline
+    \texttt{Services.InventoryService}         & $\approx$ 90\,\% \\
+    \hline
+    \texttt{Services.UserManagementService}    & $\approx$ 80\,\% \\
+    \hline
+    \texttt{Services.ProcurementService}       & $\approx$ 70\,\% \\
+    \hline
+    \texttt{Services.ConsolidationService}     & $\approx$ 85\,\% \\
+    \hline
+    \end{tabular}
+    \caption{Cobertura de linhas por componente crítico.}
+    \label{tab:cobertura_componente}
+    \end{table}
+
+    Importa registar as lacunas conhecidas. Os ramos alternativos \texttt{ProcurementService.AtualizarEncomendaRascunhoAsync} e \texttt{CancelarEncomendaAsync} não estão exaustivamente cobertos, e o \texttt{ReportingService} é um agregador de leitura sobre KPIs (sem efeitos colaterais), pelo que se optou por não lhe dedicar testes nesta etapa. Estas lacunas estão registadas em \texttt{docs/testes/cobertura.md} como pontos de evolução. O requisito não-funcional RNF-15 (cobertura de testes superior a 70\,\%) é satisfeito em todos os componentes críticos.
+
+    \begin{tcolorbox}[title=Interação com o LLM]
+    \textbf{Prompt utilizado}
+
+    Que ferramenta de cobertura de código se integra melhor com \texttt{dotnet test} e como configuro a recolha para excluir aquilo que não faz sentido medir (\textit{migrations}, código auto-gerado, \textit{boilerplate} de arranque)?
+
+    \tcblower
+
+    \textbf{Análise crítica}
+
+    O \textit{snippet} XML produzido pelo LLM tinha um pequeno erro: o atributo \texttt{ExcludeByAttribute} estava listado com nome parcial (\texttt{Obsolete} em vez de \texttt{ObsoleteAttribute}), o que o coverlet aceita mas que cria ambiguidade documental. Foi corrigido para o nome completo.
+
+    O segundo ajuste foi cosmético: o LLM colocou \texttt{DeterministicReport=true}, o que causou erros no nosso ambiente Windows (problemas de \textit{paths} absolutos); trocou-se para \texttt{false}.
+    \end{tcolorbox}
+
+    Tendo recolhido a evidência comportamental (testes a passar) e a evidência estrutural (cobertura), a etapa fecha com uma avaliação interpretativa da qualidade segundo o modelo da norma ISO/IEC~25010, que organiza a qualidade de um produto de \textit{software} em oito características principais: \textit{Functional Suitability}, \textit{Performance Efficiency}, \textit{Compatibility}, \textit{Usability}, \textit{Reliability}, \textit{Security}, \textit{Maintainability} e \textit{Portability}. A avaliação que se segue resulta da análise das evidências reunidas durante a implementação e os testes, e segue uma escala qualitativa de 1 (não tratado) a 5 (exemplar). A Tabela~\ref{tab:iso25010_resumo} resume os resultados; a justificação detalhada está em \texttt{docs/testes/iso25010.md}.
+
+    \begin{table}[H]
+    \centering
+    \small
+    \begin{tabular}{|p{10cm}|c|}
+    \hline
+    \textbf{Característica} & \textbf{Nota} \\
+    \hline
+    \textit{Functional Suitability} (Adequação Funcional)       & 4 \\
+    \hline
+    \textit{Performance Efficiency} (Eficiência de Desempenho)  & 3 \\
+    \hline
+    \textit{Compatibility} (Compatibilidade)                    & 4 \\
+    \hline
+    \textit{Usability} (Usabilidade)                            & 3 \\
+    \hline
+    \textit{Reliability} (Fiabilidade)                          & 4 \\
+    \hline
+    \textbf{\textit{Security} (Segurança)}                      & \textbf{4,5} \\
+    \hline
+    \textbf{\textit{Maintainability} (Manutenibilidade)}        & \textbf{4,5} \\
+    \hline
+    \textit{Portability} (Portabilidade)                        & 3,5 \\
+    \hline
+    \textbf{Média ponderada}                                    & \textbf{3,8 / 5} \\
+    \hline
+    \end{tabular}
+    \caption{Avaliação ISO/IEC~25010 do Belo Mercado Manager.}
+    \label{tab:iso25010_resumo}
+    \end{table}
+
+    Os pontos fortes da avaliação concentram-se em três características. Em \textit{Security} (4,5), o produto usa BCrypt com \textit{cost factor}~11 para \textit{password hashing}, garante \textit{login constant-time} para mitigar enumeração de utilizadores, aplica \textit{lockout} após 5 falhas, rotaciona \textit{refresh tokens} com revogação imediata e mantém um \textit{audit log} universal das operações de estado. Em \textit{Maintainability} (4,5), assenta numa separação rigorosa em camadas (Domain, Application, Infrastructure, Api e dois \textit{front-ends}), com injeção de dependências para todos os efeitos colaterais (relógio, \textit{audit}, repositórios, geração de \textit{tokens}); a \textit{suite} de 165 testes corre em cerca de 3~segundos. Em \textit{Functional Suitability} (4), 15 dos 19 casos de uso estão implementados (os 4 restantes fora de âmbito por decisão arquitetural explícita) e 100\,\% dos Requisitos Funcionais em âmbito estão cobertos por pelo menos um teste automático.
+
+    Os pontos a melhorar estão sobretudo em \textit{Performance Efficiency} (3) e \textit{Usability} (3). Não foram efetuados testes de carga, dado que o SRS não fixa SLAs quantitativos verificáveis em CI, e recomenda-se, em evolução futura, introduzir \texttt{k6} ou \texttt{Bombardier} sobre o \textit{endpoint} \texttt{POST /api/v1/vendas}. No \textit{front-end} Blazor, não foi feita auditoria formal a WCAG~2.1; sugere-se a introdução de \texttt{axe-core} numa fase posterior. Em \textit{Portability} (3,5), a camada de repositórios via \textit{interface} está pronta para uma troca de SGBD, mas as \textit{migrations} contêm SQL específico do SQL~Server e teriam de ser re-escritas.
+
+    \begin{tcolorbox}[title=Interação com o LLM]
+    \textbf{Prompt utilizado}
+
+    Como devo aplicar o modelo de qualidade ISO/IEC~25010 a este sistema para obter uma avaliação útil e não apenas uma \textit{checklist} de marcar cruzes? Que evidências do produto justificam uma nota mais alta ou mais baixa em cada característica?
+
+    \tcblower
+
+    \textbf{Análise crítica}
+
+    A primeira avaliação produzida pelo LLM foi excessivamente generosa, atribuindo 5 em quase todas as características, claramente desalinhada com a maturidade real do produto. Foi necessário um \textit{pass} de calibração: pediu-se ao modelo para justificar cada nota com evidências concretas e descartar qualquer característica ``por defeito''.
+
+    Após esse \textit{pass}, a distribuição passou a refletir as evidências reais, com \textit{Security} e \textit{Maintainability} como pontos fortes e \textit{Performance} e \textit{Usability} como pontos a evoluir. É um padrão típico do modelo, o chamado otimismo de \textit{baseline}, que se mitiga forçando a justificação explícita de cada nota.
+    \end{tcolorbox}
+
+%--------------------------------------------------------------------------
+\section{Conclusão da Etapa}
+%--------------------------------------------------------------------------
+
+    A Etapa~4 entregou uma \textit{suite} de 165 testes automáticos (142 unitários, 6 de integração e 17 de aceitação), a passar consistentemente em cerca de 3~segundos sobre a solução completa. A rastreabilidade entre SRS, casos de uso e testes está formalizada e demonstra cobertura total dos requisitos funcionais em âmbito; a cobertura de linhas excede 70\,\% em todos os componentes críticos, satisfazendo o RNF-15.
+
+    Em termos metodológicos, a geração assistida por LLM revelou-se eficaz não apenas pelo ganho de produtividade observado (cerca de 4$\times$ face à escrita manual estimada), mas sobretudo como gerador de \textit{edge cases} que escapariam à intuição de um revisor com pressa, sendo o caso do NIF \texttt{"000000000"} o exemplo mais ilustrativo. A contrapartida foi a necessidade de revisão humana sistemática para detetar APIs inventadas, otimismo de avaliação e omissões silenciosas.
+
+    À luz do modelo ISO/IEC~25010, o produto exibe pontos particularmente sólidos em \textit{Security} e \textit{Maintainability} (notas de 4,5) e tem como pontos a evoluir a \textit{Performance Efficiency} (introduzir testes de carga) e a \textit{Accessibility} no \textit{front-end} (auditoria WCAG). Nenhuma das lacunas identificadas compromete a operação prevista para a cadeia de 5 lojas do caso de estudo, pelo que se considera que o sistema cumpre os requisitos de qualidade necessários para entrar em produção em ambiente académico.

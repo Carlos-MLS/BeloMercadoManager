@@ -1,0 +1,356 @@
+@page "/fornecedores/novo"
+@page "/fornecedores/{Id:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "AdminCadeia")]
+@rendermode InteractiveServer
+@using BeloMercado.Application.Dtos.Fornecedores
+@using BeloMercado.Application.Dtos.Catalogo
+@using BeloMercado.BackofficeWeb.Auth
+@inject FornecedoresApiClient FornecedoresApi
+@inject ProdutosApiClient ProdutosApi
+@inject NavigationManager Nav
+
+<PageTitle>@(IsNew ? "Novo fornecedor" : "Editar fornecedor") — Belo Mercado</PageTitle>
+
+<div class="page">
+    <header class="page-header">
+        <h1>@(IsNew ? "Novo fornecedor" : "Editar fornecedor")</h1>
+        <a href="/fornecedores" class="back-link">← Voltar à lista</a>
+    </header>
+
+    @if (loading)
+    {
+        <p>A carregar...</p>
+    }
+    else
+    {
+        <EditForm Model="model" OnValidSubmit="OnSubmit" FormName="fornecedor">
+            <DataAnnotationsValidator />
+
+            <section class="card">
+                <h2>Dados do fornecedor</h2>
+                <div class="form-grid">
+                    <div class="form-group form-wide">
+                        <label>Nome</label>
+                        <InputText @bind-Value="model.Nome" class="form-control" />
+                        <ValidationMessage For="@(() => model.Nome)" />
+                    </div>
+
+                    <div class="form-group">
+                        <label>NIF (9 dígitos)</label>
+                        @if (IsNew)
+                        {
+                            <InputText @bind-Value="model.Nif" class="form-control" />
+                            <ValidationMessage For="@(() => model.Nif)" />
+                        }
+                        else
+                        {
+                            <input class="form-control" value="@model.Nif" disabled />
+                            <small class="hint">O NIF não pode ser alterado.</small>
+                        }
+                    </div>
+
+                    <div class="form-group">
+                        <label>Ramo (opcional)</label>
+                        <InputText @bind-Value="model.Ramo" class="form-control" placeholder="bebidas, mercearia, ..." />
+                    </div>
+
+                    <div class="form-group form-wide">
+                        <label>Morada</label>
+                        <InputText @bind-Value="model.Morada" class="form-control" />
+                        <ValidationMessage For="@(() => model.Morada)" />
+                    </div>
+
+                    <div class="form-group">
+                        <label>Contacto</label>
+                        <InputText @bind-Value="model.Contacto" class="form-control" />
+                        <ValidationMessage For="@(() => model.Contacto)" />
+                    </div>
+
+                    <div class="form-group">
+                        <label>Email</label>
+                        <InputText @bind-Value="model.Email" class="form-control" type="email" />
+                        <ValidationMessage For="@(() => model.Email)" />
+                    </div>
+
+                    <div class="form-group form-wide">
+                        <label>Condições de pagamento (opcional)</label>
+                        <InputText @bind-Value="model.CondicoesPagamento" class="form-control" placeholder="30 dias, pronto, ..." />
+                    </div>
+
+                    @if (!IsNew)
+                    {
+                        <div class="form-group form-check form-wide">
+                            <label>
+                                <InputCheckbox @bind-Value="model.Ativo" /> Ativo
+                            </label>
+                        </div>
+                    }
+                </div>
+            </section>
+
+            <section class="card">
+                <div class="card-header">
+                    <h2>Produtos associados</h2>
+                    <button type="button" class="btn btn-link" @onclick="AdicionarLinha">+ Adicionar produto</button>
+                </div>
+
+                @if (model.Produtos.Count == 0)
+                {
+                    <p class="empty">Nenhum produto associado ainda.</p>
+                }
+                else
+                {
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Produto</th>
+                                <th class="num">Preço custo (€)</th>
+                                <th class="num">Desconto %</th>
+                                <th class="num">Prazo (dias)</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @for (var i = 0; i < model.Produtos.Count; i++)
+                            {
+                                var idx = i;
+                                <tr>
+                                    <td>
+                                        <select class="form-control" @bind="model.Produtos[idx].ProdutoIdValue">
+                                            <option value="">— escolher —</option>
+                                            @foreach (var p in produtosAtivos)
+                                            {
+                                                <option value="@p.Id">@p.Descricao (@p.Ean13)</option>
+                                            }
+                                        </select>
+                                    </td>
+                                    <td class="num">
+                                        <input type="number" step="0.01" min="0" class="form-control inline"
+                                               @bind="model.Produtos[idx].PrecoCusto" />
+                                    </td>
+                                    <td class="num">
+                                        <input type="number" step="0.5" min="0" max="100" class="form-control inline"
+                                               @bind="model.Produtos[idx].DescontoPercentagem" />
+                                    </td>
+                                    <td class="num">
+                                        <input type="number" step="1" min="0" max="365" class="form-control inline"
+                                               @bind="model.Produtos[idx].PrazoEntregaDias" />
+                                    </td>
+                                    <td>
+                                        <button type="button" class="btn btn-link btn-danger" @onclick="() => RemoverLinha(idx)">×</button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </section>
+
+            @if (!string.IsNullOrEmpty(error))
+            {
+                <div class="alert alert-danger">@error</div>
+            }
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary" disabled="@busy">
+                    @(busy ? "A guardar..." : (IsNew ? "Criar" : "Guardar"))
+                </button>
+                <a href="/fornecedores" class="btn btn-link">Cancelar</a>
+            </div>
+        </EditForm>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+
+    private bool IsNew => Id is null;
+
+    [SupplyParameterFromForm]
+    private FormModel model { get; set; } = new();
+
+    private List<ProdutoResponse> produtosAtivos = new();
+    private bool loading = true;
+    private bool busy;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            produtosAtivos = (await ProdutosApi.ListAsync())
+                .Where(p => p.Ativo).OrderBy(p => p.Descricao).ToList();
+        }
+        catch { /* lista vazia se API offline */ }
+
+        if (!IsNew)
+        {
+            var existing = (await FornecedoresApi.ListAsync()).FirstOrDefault(f => f.Id == Id);
+            if (existing is null)
+            {
+                error = "Fornecedor não encontrado.";
+            }
+            else
+            {
+                model.Nome = existing.Nome;
+                model.Nif = existing.Nif;
+                model.Morada = existing.Morada;
+                model.Contacto = existing.Contacto;
+                model.Email = existing.Email;
+                model.Ramo = existing.Ramo;
+                model.CondicoesPagamento = existing.CondicoesPagamento;
+                model.Ativo = existing.Ativo;
+                model.Produtos = existing.ProdutosAssociados.Select(p => new ProdutoLinhaForm
+                {
+                    ProdutoIdValue = p.ProdutoId.ToString(),
+                    PrecoCusto = p.PrecoCusto,
+                    DescontoPercentagem = p.DescontoPercentagem,
+                    PrazoEntregaDias = p.PrazoEntregaDias
+                }).ToList();
+            }
+        }
+        loading = false;
+    }
+
+    private void AdicionarLinha() => model.Produtos.Add(new ProdutoLinhaForm());
+
+    private void RemoverLinha(int index) => model.Produtos.RemoveAt(index);
+
+    private async Task OnSubmit()
+    {
+        busy = true;
+        error = null;
+        try
+        {
+            var produtos = new List<ProdutoFornecedorRequest>();
+            foreach (var p in model.Produtos)
+            {
+                if (string.IsNullOrEmpty(p.ProdutoIdValue)) continue;
+                produtos.Add(new ProdutoFornecedorRequest
+                {
+                    ProdutoId = Guid.Parse(p.ProdutoIdValue),
+                    PrecoCusto = p.PrecoCusto,
+                    DescontoPercentagem = p.DescontoPercentagem,
+                    PrazoEntregaDias = p.PrazoEntregaDias
+                });
+            }
+
+            if (IsNew)
+            {
+                var result = await FornecedoresApi.CreateAsync(new CreateFornecedorRequest
+                {
+                    Nome = model.Nome,
+                    Nif = model.Nif,
+                    Morada = model.Morada,
+                    Contacto = model.Contacto,
+                    Email = model.Email,
+                    Ramo = string.IsNullOrWhiteSpace(model.Ramo) ? null : model.Ramo,
+                    CondicoesPagamento = string.IsNullOrWhiteSpace(model.CondicoesPagamento) ? null : model.CondicoesPagamento,
+                    ProdutosAssociados = produtos
+                });
+                if (result.Success) Nav.NavigateTo("/fornecedores");
+                else error = MapError(result.ErrorCode, result.StatusCode);
+            }
+            else
+            {
+                var result = await FornecedoresApi.UpdateAsync(Id!.Value, new UpdateFornecedorRequest
+                {
+                    Nome = model.Nome,
+                    Morada = model.Morada,
+                    Contacto = model.Contacto,
+                    Email = model.Email,
+                    Ramo = string.IsNullOrWhiteSpace(model.Ramo) ? null : model.Ramo,
+                    CondicoesPagamento = string.IsNullOrWhiteSpace(model.CondicoesPagamento) ? null : model.CondicoesPagamento,
+                    Ativo = model.Ativo,
+                    ProdutosAssociados = produtos
+                });
+                if (result.Success) Nav.NavigateTo("/fornecedores");
+                else error = MapError(result.ErrorCode, result.StatusCode);
+            }
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private static string MapError(string? code, int status) => code switch
+    {
+        "NIF_INVALIDO" => "NIF inválido (verifica o dígito de controlo).",
+        "NIF_DUPLICADO" => "Já existe um fornecedor com este NIF.",
+        "PRODUTO_NAO_ENCONTRADO" => "Um dos produtos associados não existe.",
+        "FORNECEDOR_NAO_ENCONTRADO" => "Fornecedor não encontrado.",
+        null => $"Erro {status}.",
+        _ => code
+    };
+
+    public class FormModel
+    {
+        [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.MaxLength(100)]
+        public string Nome { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required]
+        [System.ComponentModel.DataAnnotations.StringLength(9, MinimumLength = 9, ErrorMessage = "NIF tem 9 dígitos.")]
+        public string Nif { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.MaxLength(255)]
+        public string Morada { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.MaxLength(32)]
+        public string Contacto { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.EmailAddress]
+        [System.ComponentModel.DataAnnotations.MaxLength(255)]
+        public string Email { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.MaxLength(64)]
+        public string? Ramo { get; set; }
+
+        [System.ComponentModel.DataAnnotations.MaxLength(255)]
+        public string? CondicoesPagamento { get; set; }
+
+        public bool Ativo { get; set; } = true;
+
+        public List<ProdutoLinhaForm> Produtos { get; set; } = new();
+    }
+
+    public class ProdutoLinhaForm
+    {
+        public string ProdutoIdValue { get; set; } = "";
+        public decimal PrecoCusto { get; set; }
+        public decimal DescontoPercentagem { get; set; }
+        public int PrazoEntregaDias { get; set; } = 7;
+    }
+}
+
+<style>
+    .page { max-width: 100%; margin: 24px 0; padding: 0 24px; }
+    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .back-link { color: #1f4ea1; text-decoration: none; }
+    .card { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin-bottom: 16px; }
+    .card h2 { margin-top: 0; font-size: 1.05rem; }
+    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .form-group { display: flex; flex-direction: column; }
+    .form-group.form-wide { grid-column: 1 / -1; }
+    .form-group.form-check label { display: flex; gap: 8px; align-items: center; }
+    .form-group label { font-weight: 500; margin-bottom: 4px; }
+    .form-control { padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9rem; }
+    .form-control.inline { padding: 4px 6px; width: 100%; }
+    .hint { color: #888; font-size: 0.8rem; margin-top: 4px; }
+    .form-actions { display: flex; gap: 12px; align-items: center; margin-top: 16px; }
+    .btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem; text-decoration: none; }
+    .btn-primary { background: #1f4ea1; color: white; }
+    .btn-link { background: none; color: #1f4ea1; }
+    .btn-danger { color: #b02a37; font-weight: 700; }
+    .btn:disabled { opacity: 0.6; }
+    .alert-danger { padding: 8px; background: #f8d7da; color: #842029; border-radius: 4px; margin: 12px 0; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 6px 8px; border-bottom: 1px solid #eee; text-align: left; vertical-align: middle; }
+    th.num, td.num { text-align: right; }
+    .empty { color: #888; font-style: italic; }
+</style>

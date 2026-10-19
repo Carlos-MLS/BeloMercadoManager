@@ -1,0 +1,109 @@
+@page "/"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@rendermode InteractiveServer
+@using BeloMercado.Application.Dtos.Caixa
+@using BeloMercado.PosWeb.Auth
+@using Microsoft.AspNetCore.Components.Authorization
+@inject AuthApiClient AuthApi
+@inject ApiAuthenticationStateProvider AuthState
+@inject TokenStore Tokens
+@inject CaixasApiClient CaixasApi
+@inject NavigationManager Nav
+
+<PageTitle>Belo Mercado POS</PageTitle>
+
+<AuthorizeView>
+    <Authorized>
+        <div class="home">
+            <h1>Belo Mercado POS</h1>
+            <p class="lead">Bem-vindo, <strong>@(context.User.Identity?.Name)</strong>.</p>
+            <p>Perfil: <strong>@(context.User.FindFirst("role")?.Value)</strong></p>
+
+            @if (loadingCaixa)
+            {
+                <p class="text-muted">A verificar estado da caixa...</p>
+            }
+            else if (caixaHoje is not null && caixaHoje.Estado == "Aberta")
+            {
+                <div class="caixa-banner caixa-aberta">
+                    <strong>Caixa aberta</strong> desde
+                    <span>@caixaHoje.DataHoraAbertura.ToLocalTime().ToString("HH:mm")</span>
+                    — fundo inicial @caixaHoje.FundoInicial.ToString("0.00") €.
+                </div>
+                <div class="actions">
+                    <NavLink href="/venda" class="btn btn-primary">Nova Venda</NavLink>
+                    <NavLink href="@($"/caixa/{caixaHoje.Id}")" class="btn btn-secondary">Fechar Caixa</NavLink>
+                    <NavLink href="/perfil" class="btn btn-secondary">Perfil</NavLink>
+                    <button class="btn btn-secondary" @onclick="Logout">Sair</button>
+                </div>
+            }
+            else if (caixaHoje is not null && caixaHoje.Estado == "Fechada")
+            {
+                <div class="caixa-banner caixa-encerrada">
+                    <strong>Caixa de hoje já encerrada</strong> às
+                    <span>@(caixaHoje.DataHoraFecho?.ToLocalTime().ToString("HH:mm"))</span>.
+                    Só pode haver uma caixa por loja por dia — a próxima abertura é amanhã.
+                </div>
+                <div class="actions">
+                    <NavLink href="@($"/caixa/{caixaHoje.Id}")" class="btn btn-secondary">Ver resumo</NavLink>
+                    <NavLink href="/perfil" class="btn btn-secondary">Perfil</NavLink>
+                    <button class="btn btn-secondary" @onclick="Logout">Sair</button>
+                </div>
+            }
+            else
+            {
+                <div class="caixa-banner caixa-fechada">
+                    <strong>Ainda não há caixa hoje.</strong>
+                    Antes de fazer vendas, abre a caixa do dia.
+                </div>
+                <div class="actions">
+                    <NavLink href="/caixa" class="btn btn-primary">Abrir Caixa</NavLink>
+                    <NavLink href="/perfil" class="btn btn-secondary">Perfil</NavLink>
+                    <button class="btn btn-secondary" @onclick="Logout">Sair</button>
+                </div>
+            }
+        </div>
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    private CaixaResponse? caixaHoje;
+    private bool loadingCaixa = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { caixaHoje = await CaixasApi.GetHojeAsync(); }
+        catch { caixaHoje = null; }
+        finally { loadingCaixa = false; }
+    }
+
+    private async Task Logout()
+    {
+        var access = await Tokens.GetAccessTokenAsync();
+        var refresh = await Tokens.GetRefreshTokenAsync();
+        if (!string.IsNullOrEmpty(access) && !string.IsNullOrEmpty(refresh))
+        {
+            await AuthApi.LogoutAsync(access, refresh);
+        }
+        await AuthState.NotifyLogoutAsync();
+        Nav.NavigateTo("/login");
+    }
+}
+
+<style>
+    .home { padding: 8px 0; }
+    .lead { font-size: 1.05rem; }
+    .actions { display: flex; gap: 8px; margin: 16px 0; flex-wrap: wrap; }
+    .btn { padding: 10px 18px; border-radius: 4px; border: none;
+           cursor: pointer; text-decoration: none; display: inline-block; font-size: 0.95rem; }
+    .btn-primary { background: #1f4ea1; color: white; }
+    .btn-secondary { background: #6c757d; color: white; }
+    .text-muted { color: #6c757d; font-style: italic; }
+    .caixa-banner { padding: 12px 16px; border-radius: 6px; margin: 12px 0;
+                    border-left: 4px solid transparent; }
+    .caixa-banner span { font-weight: 600; }
+    .caixa-aberta { background: #d1e7dd; color: #0f5132; border-left-color: #198754; }
+    .caixa-fechada { background: #fff3cd; color: #664d03; border-left-color: #ffc107; }
+    .caixa-encerrada { background: #e2e3e5; color: #41464b; border-left-color: #6c757d; }
+    .caixa-encerrada em { color: #1f4ea1; font-style: italic; }
+</style>

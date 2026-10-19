@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Configuração para cobertura de código com Coverlet (DataCollector).
+  Uso:
+    dotnet test tests/BeloMercado.UnitTests --settings tests/coverage.runsettings
+    dotnet test --settings tests/coverage.runsettings  (corre todos)
+-->
+<RunSettings>
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="XPlat code coverage">
+        <Configuration>
+          <Format>cobertura,opencover,json</Format>
+          <Exclude>[*.Tests?]*,[*.UnitTests]*,[*.IntegrationTests]*,[*.AcceptanceTests]*,[BeloMercado.Api]Program,[BeloMercado.Api]*Migrations*,[BeloMercado.Infrastructure]*Migrations*</Exclude>
+          <ExcludeByAttribute>Obsolete,GeneratedCodeAttribute,CompilerGeneratedAttribute</ExcludeByAttribute>
+          <IncludeTestAssembly>false</IncludeTestAssembly>
+          <SingleHit>false</SingleHit>
+          <UseSourceLink>true</UseSourceLink>
+          <DeterministicReport>false</DeterministicReport>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+</RunSettings>

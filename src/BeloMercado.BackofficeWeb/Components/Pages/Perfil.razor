@@ -1,0 +1,231 @@
+@page "/perfil"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@rendermode InteractiveServer
+@using BeloMercado.Application.Dtos.Me
+@using BeloMercado.BackofficeWeb.Auth
+@inject MeApiClient MeApi
+
+<PageTitle>Perfil — Belo Mercado</PageTitle>
+
+<div class="page">
+    <header class="page-header">
+        <h1>O meu perfil</h1>
+        <a href="/" class="back-link">← Voltar</a>
+    </header>
+
+    @if (loading)
+    {
+        <p>A carregar...</p>
+    }
+    else if (me is null)
+    {
+        <div class="alert alert-danger">Não foi possível carregar o teu perfil.</div>
+    }
+    else
+    {
+        <section class="card">
+            <h2>Dados</h2>
+            <dl class="grid">
+                <dt>Email</dt>
+                <dd>
+                    @me.Email
+                    @if (IsAdmin)
+                    {
+                        <small>(podes alterar na Gestão de Utilizadores)</small>
+                    }
+                    else
+                    {
+                        <small>(não editável — fala com o Administrador da cadeia)</small>
+                    }
+                </dd>
+
+                <dt>Perfil</dt>
+                <dd>@me.Perfil</dd>
+
+                <dt>Loja</dt>
+                <dd>
+                    @(me.LojaDesignacao ?? "—")
+                    @if (me.LojaDesignacao is null && IsAdmin)
+                    {
+                        <small>(o administrador da cadeia não está afecto a uma loja)</small>
+                    }
+                    else if (!IsAdmin)
+                    {
+                        <small>(definida pelo Administrador da cadeia)</small>
+                    }
+                </dd>
+
+                <dt>Último login</dt>
+                <dd>@(me.UltimoLogin?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") ?? "—")</dd>
+            </dl>
+
+            @if (me.PasswordTemporaria)
+            {
+                <div class="alert alert-warning">
+                    Estás a usar a password temporária. Altera-a abaixo.
+                </div>
+            }
+        </section>
+
+        <section class="card">
+            <h2>Alterar nome</h2>
+            <EditForm Model="nomeModel" OnValidSubmit="OnUpdateNome" FormName="perfilNome">
+                <DataAnnotationsValidator />
+                <div class="form-group">
+                    <label>Nome</label>
+                    <InputText @bind-Value="nomeModel.Nome" class="form-control" />
+                    <ValidationMessage For="@(() => nomeModel.Nome)" />
+                </div>
+                @if (!string.IsNullOrEmpty(nomeError)) { <div class="alert alert-danger">@nomeError</div> }
+                @if (!string.IsNullOrEmpty(nomeInfo)) { <div class="alert alert-info">@nomeInfo</div> }
+                <button type="submit" class="btn btn-primary" disabled="@busyNome">
+                    @(busyNome ? "..." : "Guardar nome")
+                </button>
+            </EditForm>
+        </section>
+
+        <section class="card">
+            <h2>Alterar password</h2>
+            <EditForm Model="pwModel" OnValidSubmit="OnChangePassword" FormName="perfilPwd">
+                <DataAnnotationsValidator />
+                <div class="form-group">
+                    <label>Password atual</label>
+                    <InputText type="password" @bind-Value="pwModel.Current" class="form-control" />
+                    <ValidationMessage For="@(() => pwModel.Current)" />
+                </div>
+                <div class="form-group">
+                    <label>Nova password</label>
+                    <InputText type="password" @bind-Value="pwModel.New" class="form-control" />
+                    <ValidationMessage For="@(() => pwModel.New)" />
+                    <small class="hint">Mínimo 8 caracteres, com 4 de 4: minúscula, maiúscula, dígito, símbolo.</small>
+                </div>
+                <div class="form-group">
+                    <label>Confirmar nova password</label>
+                    <InputText type="password" @bind-Value="pwModel.Confirm" class="form-control" />
+                </div>
+                @if (!string.IsNullOrEmpty(pwError)) { <div class="alert alert-danger">@pwError</div> }
+                @if (!string.IsNullOrEmpty(pwInfo)) { <div class="alert alert-info">@pwInfo</div> }
+                <button type="submit" class="btn btn-primary" disabled="@busyPw">
+                    @(busyPw ? "..." : "Alterar password")
+                </button>
+            </EditForm>
+        </section>
+    }
+</div>
+
+@code {
+    private MeResponse? me;
+    private bool loading = true;
+
+    private bool IsAdmin =>
+        string.Equals(me?.Perfil, "AdminCadeia", StringComparison.OrdinalIgnoreCase);
+
+    [SupplyParameterFromForm(FormName = "perfilNome")]
+    private NomeModel nomeModel { get; set; } = new();
+
+    [SupplyParameterFromForm(FormName = "perfilPwd")]
+    private PwModel pwModel { get; set; } = new();
+
+    private bool busyNome;
+    private string? nomeError;
+    private string? nomeInfo;
+
+    private bool busyPw;
+    private string? pwError;
+    private string? pwInfo;
+
+    protected override async Task OnInitializedAsync()
+    {
+        loading = true;
+        me = await MeApi.GetAsync();
+        if (me is not null) nomeModel.Nome = me.Nome;
+        loading = false;
+    }
+
+    private async Task OnUpdateNome()
+    {
+        busyNome = true;
+        nomeError = null;
+        nomeInfo = null;
+        try
+        {
+            var result = await MeApi.UpdateNomeAsync(nomeModel.Nome);
+            if (result.Success) { me = result.Value; nomeInfo = "Nome atualizado."; }
+            else nomeError = $"Erro: {result.ErrorCode ?? result.StatusCode.ToString()}";
+        }
+        finally { busyNome = false; }
+    }
+
+    private async Task OnChangePassword()
+    {
+        busyPw = true;
+        pwError = null;
+        pwInfo = null;
+        try
+        {
+            if (pwModel.New != pwModel.Confirm)
+            {
+                pwError = "A confirmação não coincide com a nova password.";
+                return;
+            }
+            var result = await MeApi.ChangePasswordAsync(pwModel.Current, pwModel.New);
+            if (result.Success)
+            {
+                me = result.Value;
+                pwModel = new PwModel();
+                pwInfo = "Password alterada com sucesso.";
+            }
+            else
+            {
+                pwError = result.ErrorCode switch
+                {
+                    "PASSWORD_INVALIDA" => "A password atual está errada.",
+                    "PASSWORD_FRACA" => "A nova password não cumpre os requisitos (8+ caracteres, 4-de-4).",
+                    "PASSWORD_IGUAL" => "A nova password tem de ser diferente da atual.",
+                    null => $"Erro {result.StatusCode}.",
+                    _ => result.ErrorCode
+                };
+            }
+        }
+        finally { busyPw = false; }
+    }
+
+    public class NomeModel
+    {
+        [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.MaxLength(100)]
+        public string Nome { get; set; } = string.Empty;
+    }
+
+    public class PwModel
+    {
+        [System.ComponentModel.DataAnnotations.Required]
+        public string Current { get; set; } = string.Empty;
+        [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.MinLength(8)]
+        public string New { get; set; } = string.Empty;
+        [System.ComponentModel.DataAnnotations.Required]
+        public string Confirm { get; set; } = string.Empty;
+    }
+}
+
+<style>
+    .page { max-width: 100%; margin: 24px 0; padding: 0 24px; }
+    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .back-link { color: #1f4ea1; text-decoration: none; }
+    .card { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin-bottom: 16px; }
+    .card h2 { margin-top: 0; font-size: 1.1rem; }
+    .grid { display: grid; grid-template-columns: 160px 1fr; gap: 6px 16px; margin: 0 0 12px 0; }
+    dt { font-weight: 500; color: #6c757d; }
+    dd { margin: 0; }
+    small { color: #888; font-size: 0.85rem; }
+    .form-group { margin-bottom: 12px; }
+    .form-group label { display: block; font-weight: 500; margin-bottom: 4px; }
+    .form-control { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+    .hint { color: #888; font-size: 0.8rem; }
+    .btn { padding: 10px 16px; border-radius: 4px; border: none; cursor: pointer; }
+    .btn-primary { background: #1f4ea1; color: white; }
+    .btn:disabled { opacity: 0.6; }
+    .alert { padding: 8px; border-radius: 4px; margin-bottom: 8px; }
+    .alert-danger { background: #f8d7da; color: #842029; }
+    .alert-warning { background: #fff3cd; color: #664d03; }
+    .alert-info { background: #cfe2ff; color: #084298; }
+</style>

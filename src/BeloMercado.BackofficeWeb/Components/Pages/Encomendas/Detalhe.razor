@@ -1,0 +1,346 @@
+@page "/encomendas/{Id:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "GerenteLoja,AdminCadeia")]
+@rendermode InteractiveServer
+@using BeloMercado.Application.Dtos.Encomendas
+@using BeloMercado.BackofficeWeb.Auth
+@using Microsoft.AspNetCore.Components.Authorization
+@inject EncomendasApiClient EncomendasApi
+@inject AuthenticationStateProvider AuthState
+@inject NavigationManager Nav
+
+<PageTitle>Encomenda — Belo Mercado</PageTitle>
+
+<div class="page">
+    <header class="page-header">
+        <h1>Encomenda</h1>
+        <a href="/encomendas" class="back-link">← Voltar à lista</a>
+    </header>
+
+    @if (loading)
+    {
+        <p>A carregar...</p>
+    }
+    else if (encomenda is null)
+    {
+        <div class="alert alert-danger">Encomenda não encontrada ou sem permissão.</div>
+    }
+    else
+    {
+        <section class="card">
+            <div class="resumo">
+                <div>
+                    <span class="label">Estado</span>
+                    <span class="badge @EstadoBadge(encomenda.Estado)">@encomenda.Estado</span>
+                </div>
+                <div>
+                    <span class="label">Fornecedor</span>
+                    <strong>@encomenda.FornecedorNome</strong>
+                </div>
+                <div>
+                    <span class="label">Criada em</span>
+                    @encomenda.DataCriacao.ToString("yyyy-MM-dd HH:mm")
+                </div>
+                @if (encomenda.DataSubmissao is not null)
+                {
+                    <div>
+                        <span class="label">Submetida em</span>
+                        @encomenda.DataSubmissao.Value.ToString("yyyy-MM-dd HH:mm")
+                    </div>
+                }
+                @if (encomenda.DataRececao is not null)
+                {
+                    <div>
+                        <span class="label">Rececionada em</span>
+                        @encomenda.DataRececao.Value.ToString("yyyy-MM-dd HH:mm")
+                    </div>
+                }
+                <div>
+                    <span class="label">Total</span>
+                    <strong>@encomenda.Total.ToString("C", pt)</strong>
+                </div>
+            </div>
+        </section>
+
+        <section class="card">
+            <h2>Linhas</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Produto</th>
+                        <th class="num">Preço custo</th>
+                        <th class="num">Desc. %</th>
+                        <th class="num">Qtd encomendada</th>
+                        <th class="num">Qtd recebida</th>
+                        <th class="num">Subtotal</th>
+                        @if (PodeRececionar)
+                        {
+                            <th class="num">A rececionar agora</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var l in encomenda.Linhas)
+                    {
+                        var emFalta = l.Quantidade - l.QuantidadeRecebida;
+                        <tr class="@(emFalta == 0 ? "linha-completa" : "")">
+                            <td>
+                                @l.ProdutoDescricao
+                                <br /><small><code>@l.ProdutoEan13</code></small>
+                            </td>
+                            <td class="num">@l.PrecoCustoUnitario.ToString("C", pt)</td>
+                            <td class="num">@l.DescontoPercentagem.ToString("N1")%</td>
+                            <td class="num">@l.Quantidade</td>
+                            <td class="num">@l.QuantidadeRecebida</td>
+                            <td class="num">@l.Subtotal.ToString("C", pt)</td>
+                            @if (PodeRececionar)
+                            {
+                                <td class="num">
+                                    <input type="number" min="0" max="@emFalta" step="1" class="qty"
+                                           value="@quantidadesRececao.GetValueOrDefault(l.Id, 0)"
+                                           @onchange="(e) => SetRececao(l.Id, e.Value?.ToString(), emFalta)"
+                                           disabled="@(emFalta == 0)" />
+                                    @if (emFalta == 0) { <small> (completa)</small> }
+                                </td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </section>
+
+        @if (!string.IsNullOrEmpty(actionError))
+        {
+            <div class="alert alert-danger">@actionError</div>
+        }
+        @if (!string.IsNullOrEmpty(actionInfo))
+        {
+            <div class="alert alert-info">@actionInfo</div>
+        }
+
+        <section class="actions-bar">
+            @if (encomenda.Estado == "Rascunho")
+            {
+                <a href="@($"/encomendas/{Id}/editar")" class="btn btn-secondary">Editar linhas</a>
+                <button class="btn btn-primary" @onclick="SubmeterAsync" disabled="@busy">
+                    @(busy ? "..." : "Submeter encomenda")
+                </button>
+                <button class="btn btn-danger" @onclick="CancelarAsync" disabled="@busy">
+                    Eliminar rascunho
+                </button>
+                <small class="hint">Encomendas acima de 5000€ podem requerer aprovação do Admin.</small>
+            }
+            else if (PodeRececionar)
+            {
+                <button class="btn btn-primary" @onclick="RececionarAsync"
+                        disabled="@(busy || quantidadesRececao.Sum(kv => kv.Value) == 0)">
+                    @(busy ? "..." : $"Rececionar {quantidadesRececao.Sum(kv => kv.Value)} unidade(s)")
+                </button>
+                <small class="hint">Indica acima quanto recebeste de cada linha. O stock é incrementado automaticamente.</small>
+            }
+        </section>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private static readonly System.Globalization.CultureInfo pt =
+        System.Globalization.CultureInfo.GetCultureInfo("pt-PT");
+
+    private EncomendaResponse? encomenda;
+    private bool loading = true;
+    private bool busy;
+    private bool podeOperar;
+    private string? actionError;
+    private string? actionInfo;
+
+    private Dictionary<Guid, int> quantidadesRececao = new();
+
+    private bool PodeRececionar =>
+        podeOperar && encomenda is not null
+        && (encomenda.Estado == "Submetida" || encomenda.Estado == "ParcialmenteRecebida");
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthState.GetAuthenticationStateAsync();
+        podeOperar = state.User.IsInRole("GerenteLoja") || state.User.IsInRole("AdminCadeia");
+
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        loading = true;
+        try
+        {
+            encomenda = await EncomendasApi.GetByIdAsync(Id);
+            quantidadesRececao = new();
+        }
+        catch (Exception ex)
+        {
+            actionError = ex.Message;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private void SetRececao(Guid linhaId, string? value, int max)
+    {
+        if (int.TryParse(value, out var n) && n > 0)
+        {
+            quantidadesRececao[linhaId] = Math.Min(n, max);
+        }
+        else
+        {
+            quantidadesRececao.Remove(linhaId);
+        }
+    }
+
+    private async Task CancelarAsync()
+    {
+        if (!await JsConfirm("Apagar este rascunho?")) return;
+        busy = true; actionError = null; actionInfo = null;
+        try
+        {
+            var result = await EncomendasApi.CancelarAsync(Id);
+            if (result.Success)
+            {
+                Nav.NavigateTo("/encomendas");
+            }
+            else
+            {
+                actionError = MapError(result.ErrorCode, result.StatusCode);
+            }
+        }
+        catch (Exception ex) { actionError = ex.Message; }
+        finally { busy = false; }
+    }
+
+    private Task<bool> JsConfirm(string msg) => Task.FromResult(true);
+
+    private async Task SubmeterAsync()
+    {
+        busy = true;
+        actionError = null;
+        actionInfo = null;
+        try
+        {
+            var result = await EncomendasApi.SubmeterAsync(Id);
+            if (result.Success)
+            {
+                actionInfo = "Encomenda submetida.";
+                await ReloadAsync();
+            }
+            else
+            {
+                actionError = MapError(result.ErrorCode, result.StatusCode);
+            }
+        }
+        catch (Exception ex)
+        {
+            actionError = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task RececionarAsync()
+    {
+        if (encomenda is null) return;
+        busy = true;
+        actionError = null;
+        actionInfo = null;
+        try
+        {
+            var linhas = quantidadesRececao
+                .Where(kv => kv.Value > 0)
+                .Select(kv => new LinhaRececionadaRequest { LinhaId = kv.Key, QuantidadeRecebida = kv.Value })
+                .ToList();
+
+            if (linhas.Count == 0)
+            {
+                actionError = "Indica pelo menos uma quantidade a rececionar.";
+                return;
+            }
+
+            var result = await EncomendasApi.RececionarAsync(Id,
+                new RececionarEncomendaRequest { Linhas = linhas });
+            if (result.Success)
+            {
+                actionInfo = "Receção registada. O stock foi incrementado.";
+                await ReloadAsync();
+            }
+            else
+            {
+                actionError = MapError(result.ErrorCode, result.StatusCode);
+            }
+        }
+        catch (Exception ex)
+        {
+            actionError = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private static string EstadoBadge(string estado) => estado switch
+    {
+        "Rascunho" => "badge-gray",
+        "Submetida" => "badge-info",
+        "ParcialmenteRecebida" => "badge-warn",
+        "Recebida" => "badge-ok",
+        "Cancelada" => "badge-off",
+        _ => "badge-gray"
+    };
+
+    private static string MapError(string? code, int status) => code switch
+    {
+        "APPROVAL_REQUIRED" => "Esta encomenda excede 5000€ — só o Admin pode submetê-la.",
+        "ENCOMENDA_NAO_ENCONTRADA" => "Encomenda não encontrada.",
+        "ESTADO_INVALIDO" => "Não é possível executar esta operação no estado atual.",
+        "QUANTIDADE_EXCEDE_PENDENTE" => "Estás a tentar rececionar mais do que falta.",
+        "QUANTIDADE_INVALIDA" => "Quantidade inválida.",
+        null => $"Erro {status}.",
+        _ => code
+    };
+}
+
+<style>
+    .page { max-width: 100%; margin: 24px 0; padding: 0 24px; }
+    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .back-link { color: #1f4ea1; text-decoration: none; }
+    .card { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin-bottom: 16px; }
+    .card h2 { margin-top: 0; font-size: 1.05rem; }
+    .resumo { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+    .resumo > div { display: flex; flex-direction: column; gap: 4px; }
+    .label { font-size: 0.8rem; color: #888; text-transform: uppercase; letter-spacing: 0.04em; }
+    .badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 0.78rem; align-self: flex-start; }
+    .badge-ok { background: #d1e7dd; color: #0f5132; }
+    .badge-warn { background: #fff3cd; color: #664d03; }
+    .badge-info { background: #cfe2ff; color: #084298; }
+    .badge-gray { background: #e2e3e5; color: #41464b; }
+    .badge-off { background: #f8d7da; color: #842029; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 8px 10px; border-bottom: 1px solid #eee; text-align: left; vertical-align: middle; }
+    th { font-weight: 600; background: #f5f5f7; }
+    th.num, td.num { text-align: right; }
+    .linha-completa { background: #f7fbf8; }
+    code { background: #f5f5f7; padding: 1px 4px; border-radius: 3px; font-size: 0.78rem; }
+    small { color: #888; }
+    .qty { width: 80px; padding: 4px 6px; border: 1px solid #ccc; border-radius: 4px; text-align: right; }
+    .actions-bar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 12px 0; }
+    .btn { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.95rem; text-decoration: none; }
+    .btn-primary { background: #1f4ea1; color: white; }
+    .btn-secondary { background: #6c757d; color: white; }
+    .btn-danger { background: #b02a37; color: white; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .hint { color: #888; }
+    .alert-danger { padding: 10px; background: #f8d7da; color: #842029; border-radius: 4px; margin-bottom: 12px; }
+    .alert-info { padding: 10px; background: #cfe2ff; color: #084298; border-radius: 4px; margin-bottom: 12px; }
+</style>

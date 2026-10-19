@@ -1,0 +1,326 @@
+@page "/produtos/novo"
+@page "/produtos/{Id:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "AdminCadeia")]
+@rendermode InteractiveServer
+@using BeloMercado.Application.Dtos.Catalogo
+@using BeloMercado.BackofficeWeb.Auth
+@using BeloMercado.Domain.Enums
+@inject ProdutosApiClient ProdutosApi
+@inject CategoriasApiClient CategoriasApi
+@inject NavigationManager Nav
+
+<PageTitle>@(IsNew ? "Novo produto" : "Editar produto") — Belo Mercado</PageTitle>
+
+<div class="page">
+    <header class="page-header">
+        <h1>@(IsNew ? "Novo produto" : "Editar produto")</h1>
+        <a href="/produtos" class="back-link">← Voltar à lista</a>
+    </header>
+
+    @if (loading)
+    {
+        <p>A carregar...</p>
+    }
+    else
+    {
+        <EditForm Model="model" OnValidSubmit="OnSubmit" FormName="produto">
+            <DataAnnotationsValidator />
+
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>EAN-13 (código de barras)</label>
+                    @if (IsNew)
+                    {
+                        <div class="input-with-action">
+                            <InputText @bind-Value="model.Ean13" class="form-control" placeholder="13 dígitos" />
+                            <button type="button" class="btn btn-secondary" @onclick="GerarEan">Gerar</button>
+                        </div>
+                        <small class="hint">Bipa o código com o leitor, escreve à mão, ou usa "Gerar" para um código de teste.</small>
+                        <ValidationMessage For="@(() => model.Ean13)" />
+                    }
+                    else
+                    {
+                        <input class="form-control" value="@model.Ean13" disabled />
+                        <small class="hint">O EAN não pode ser alterado.</small>
+                    }
+                </div>
+
+                <div class="form-group form-wide">
+                    <label>Nome do produto</label>
+                    <InputText @bind-Value="model.Descricao" class="form-control"
+                        placeholder="Ex: Pão de forma 500g — Marca X" />
+                    <small class="hint">Nome que aparece no recibo e na lista.</small>
+                    <ValidationMessage For="@(() => model.Descricao)" />
+                </div>
+
+                <div class="form-group">
+                    <label>Categoria</label>
+                    @if (categoriasAtivas.Count == 0)
+                    {
+                        <div class="alert alert-warning">
+                            Ainda não há categorias.
+                            <a href="/categorias">Criar primeira categoria →</a>
+                        </div>
+                    }
+                    else
+                    {
+                        <InputSelect @bind-Value="model.CategoriaIdValue" class="form-control">
+                            <option value="">— escolher —</option>
+                            @foreach (var c in categoriasAtivas)
+                            {
+                                <option value="@c.Id">@c.Nome</option>
+                            }
+                        </InputSelect>
+                    }
+                </div>
+
+                <div class="form-group">
+                    <label>Preço (€)</label>
+                    <InputNumber @bind-Value="model.Preco" class="form-control" step="0.01" />
+                    <ValidationMessage For="@(() => model.Preco)" />
+                </div>
+
+                <div class="form-group">
+                    <label>Taxa IVA</label>
+                    <InputSelect @bind-Value="model.TaxaIva" class="form-control">
+                        @foreach (var t in Enum.GetValues<TaxaIva>())
+                        {
+                            <option value="@t">@t (@((int)t)%)</option>
+                        }
+                    </InputSelect>
+                </div>
+
+                <div class="form-group">
+                    <label>Unidade de medida</label>
+                    <InputText @bind-Value="model.UnidadeMedida" class="form-control" placeholder="UN, KG, L, ..." />
+                    <ValidationMessage For="@(() => model.UnidadeMedida)" />
+                </div>
+
+                <div class="form-group form-wide">
+                    <label>URL da imagem (opcional)</label>
+                    <InputText @bind-Value="model.ImagemUrl" class="form-control" />
+                    <ValidationMessage For="@(() => model.ImagemUrl)" />
+                </div>
+
+                @if (!IsNew)
+                {
+                    <div class="form-group form-check form-wide">
+                        <label>
+                            <InputCheckbox @bind-Value="model.Ativo" /> Ativo
+                        </label>
+                    </div>
+                }
+            </div>
+
+            @if (!string.IsNullOrEmpty(error))
+            {
+                <div class="alert alert-danger">@error</div>
+            }
+            @if (!string.IsNullOrEmpty(info))
+            {
+                <div class="alert alert-info">@info</div>
+            }
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary" disabled="@busy">
+                    @(busy ? "A guardar..." : (IsNew ? "Criar" : "Guardar"))
+                </button>
+                <a href="/produtos" class="btn btn-link">Cancelar</a>
+            </div>
+        </EditForm>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+
+    private bool IsNew => Id is null;
+
+    [SupplyParameterFromForm]
+    private FormModel model { get; set; } = new();
+
+    private List<CategoriaResponse> categoriasAtivas = new();
+    private bool loading = true;
+    private bool busy;
+    private string? error;
+    private string? info;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            categoriasAtivas = (await CategoriasApi.ListAsync())
+                .Where(c => c.Ativo).OrderBy(c => c.Nome).ToList();
+        }
+        catch { /* lista vazia se API offline */ }
+
+        if (!IsNew)
+        {
+            var existing = await ProdutosApi.GetByIdAsync(Id!.Value);
+            if (existing is null)
+            {
+                error = "Produto não encontrado.";
+            }
+            else
+            {
+                model.Ean13 = existing.Ean13;
+                model.Descricao = existing.Descricao;
+                model.CategoriaIdValue = existing.CategoriaId.ToString();
+                model.Preco = existing.Preco;
+                model.TaxaIva = Enum.TryParse<TaxaIva>(existing.TaxaIva, out var t) ? t : TaxaIva.Normal;
+                model.UnidadeMedida = existing.UnidadeMedida;
+                model.ImagemUrl = existing.ImagemUrl;
+                model.Ativo = existing.Ativo;
+            }
+        }
+        loading = false;
+    }
+
+    private async Task OnSubmit()
+    {
+        busy = true;
+        error = null;
+        info = null;
+        try
+        {
+            if (!Guid.TryParse(model.CategoriaIdValue, out var categoriaId))
+            {
+                error = "Escolhe uma categoria.";
+                return;
+            }
+
+            if (IsNew)
+            {
+                var result = await ProdutosApi.CreateAsync(new CreateProdutoRequest
+                {
+                    Ean13 = model.Ean13,
+                    Descricao = model.Descricao,
+                    CategoriaId = categoriaId,
+                    Preco = model.Preco,
+                    TaxaIva = model.TaxaIva,
+                    UnidadeMedida = model.UnidadeMedida,
+                    ImagemUrl = string.IsNullOrWhiteSpace(model.ImagemUrl) ? null : model.ImagemUrl
+                });
+                if (result.Success)
+                {
+                    Nav.NavigateTo("/produtos");
+                }
+                else
+                {
+                    error = MapError(result.ErrorCode, result.StatusCode);
+                }
+            }
+            else
+            {
+                var result = await ProdutosApi.UpdateAsync(Id!.Value, new UpdateProdutoRequest
+                {
+                    Descricao = model.Descricao,
+                    CategoriaId = categoriaId,
+                    Preco = model.Preco,
+                    TaxaIva = model.TaxaIva,
+                    UnidadeMedida = model.UnidadeMedida,
+                    ImagemUrl = string.IsNullOrWhiteSpace(model.ImagemUrl) ? null : model.ImagemUrl,
+                    Ativo = model.Ativo
+                });
+                if (result.Success)
+                {
+                    Nav.NavigateTo("/produtos");
+                }
+                else
+                {
+                    error = MapError(result.ErrorCode, result.StatusCode);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private static string MapError(string? code, int status) => code switch
+    {
+        "EAN_INVALIDO" => "EAN-13 inválido (verifica o dígito de controlo).",
+        "EAN_DUPLICADO" => "Já existe um produto com este EAN.",
+        "CATEGORIA_NAO_ENCONTRADA" => "Categoria não encontrada.",
+        "PRODUTO_NAO_ENCONTRADO" => "Produto não encontrado.",
+        null => $"Erro {status}.",
+        _ => code
+    };
+
+    /// <summary>
+    /// Gera um EAN-13 aleatório com prefixo Portugal (560) e dígito de
+    /// controlo correcto (mod-10). Útil quando o produto não tem código
+    /// de barras impresso (ex: a granel, packs internos).
+    /// </summary>
+    private void GerarEan()
+    {
+        var rng = new Random();
+        var body = "560" + string.Concat(Enumerable.Range(0, 9).Select(_ => rng.Next(0, 10)));
+        var sum = 0;
+        for (var i = 0; i < 12; i++)
+        {
+            var d = body[i] - '0';
+            sum += (i % 2 == 0) ? d : d * 3;
+        }
+        var check = (10 - sum % 10) % 10;
+        model.Ean13 = body + check;
+    }
+
+    public class FormModel
+    {
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Indica o código EAN-13.")]
+        [System.ComponentModel.DataAnnotations.StringLength(13, MinimumLength = 13, ErrorMessage = "O EAN-13 tem 13 dígitos.")]
+        public string Ean13 { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Indica o nome do produto.")]
+        [System.ComponentModel.DataAnnotations.MaxLength(255, ErrorMessage = "Máximo 255 caracteres.")]
+        public string Descricao { get; set; } = string.Empty;
+
+        public string CategoriaIdValue { get; set; } = "";
+
+        [System.ComponentModel.DataAnnotations.Range(0.01, 99999.99,
+            ErrorMessage = "O preço tem de estar entre 0,01 € e 99999,99 €.")]
+        public decimal Preco { get; set; }
+
+        public TaxaIva TaxaIva { get; set; } = TaxaIva.Normal;
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Indica a unidade de medida (UN, KG, L, ...).")]
+        [System.ComponentModel.DataAnnotations.MaxLength(16, ErrorMessage = "Máximo 16 caracteres.")]
+        public string UnidadeMedida { get; set; } = "UN";
+
+        [System.ComponentModel.DataAnnotations.MaxLength(512, ErrorMessage = "URL demasiado longo.")]
+        public string? ImagemUrl { get; set; }
+
+        public bool Ativo { get; set; } = true;
+    }
+}
+
+<style>
+    .page { max-width: 100%; margin: 24px 0; padding: 0 24px; }
+    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .back-link { color: #1f4ea1; text-decoration: none; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 20px; }
+    .form-group { display: flex; flex-direction: column; }
+    .form-group.form-wide { grid-column: 1 / -1; }
+    .form-group.form-check label { display: flex; gap: 8px; align-items: center; }
+    .form-group label { font-weight: 500; margin-bottom: 4px; }
+    .form-control { padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+    .hint { color: #888; font-size: 0.8rem; margin-top: 4px; }
+    .input-with-action { display: flex; gap: 6px; }
+    .input-with-action .form-control { flex: 1; }
+    .form-actions { display: flex; gap: 12px; align-items: center; margin-top: 16px; }
+    .btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem; text-decoration: none; }
+    .btn-primary { background: #1f4ea1; color: white; }
+    .btn-secondary { background: #6c757d; color: white; }
+    .btn-link { background: none; color: #1f4ea1; }
+    .btn:disabled { opacity: 0.6; }
+    .alert-danger { padding: 8px; background: #f8d7da; color: #842029; border-radius: 4px; margin: 12px 0; }
+    .alert-warning { padding: 8px; background: #fff3cd; color: #664d03; border-radius: 4px; margin: 0; }
+    .alert-warning a { color: #664d03; font-weight: 500; }
+    .alert-info { padding: 8px; background: #cfe2ff; color: #084298; border-radius: 4px; margin: 12px 0; }
+</style>

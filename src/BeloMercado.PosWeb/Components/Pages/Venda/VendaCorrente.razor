@@ -1,0 +1,407 @@
+@page "/venda"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using BeloMercado.Application.Dtos.Catalogo
+@using BeloMercado.Application.Dtos.Vendas
+@using BeloMercado.Domain.Enums
+@using BeloMercado.PosWeb.Auth
+@inject ProdutosApiClient ProdutosApi
+@inject VendasApiClient VendasApi
+@inject NavigationManager Nav
+@rendermode InteractiveServer
+
+<PageTitle>Venda — Belo Mercado POS</PageTitle>
+
+@if (loadingCatalog)
+{
+    <p>A carregar catálogo...</p>
+}
+else if (stage == Stage.Carrinho)
+{
+    <div class="venda-grid">
+        <div class="cart">
+            <h2>Nova Venda</h2>
+            <div class="search-box">
+                <input @ref="eanInputRef" @bind="eanInput" @bind:event="oninput"
+                       @onkeydown="OnEanKey" placeholder="Bipa código de barras ou pesquisa..."
+                       class="form-control" />
+                <button class="btn btn-primary" @onclick="AddByEan">Adicionar</button>
+            </div>
+            @if (!string.IsNullOrEmpty(scanError))
+            {
+                <div class="alert alert-warning">@scanError</div>
+            }
+
+            @if (linhas.Count == 0)
+            {
+                <p class="empty">Sem produtos no carrinho.</p>
+            }
+            else
+            {
+                <table class="lines">
+                    <thead>
+                        <tr><th>Qtd</th><th>EAN</th><th>Descrição</th>
+                            <th class="num">Preço</th><th class="num">IVA</th>
+                            <th class="num">Subtotal</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var l in linhas)
+                        {
+                            <tr>
+                                <td>
+                                    <button class="btn btn-tiny" @onclick="@(() => DecQty(l))">−</button>
+                                    @l.Quantidade
+                                    <button class="btn btn-tiny" @onclick="@(() => IncQty(l))">+</button>
+                                </td>
+                                <td><code>@l.Ean13</code></td>
+                                <td>@l.Descricao</td>
+                                <td class="num">@l.PrecoUnitario.ToString("0.00") €</td>
+                                <td class="num">@l.TaxaIvaPercentagem%</td>
+                                <td class="num">@l.Subtotal.ToString("0.00") €</td>
+                                <td><button class="btn btn-danger btn-tiny" @onclick="@(() => Remove(l))">×</button></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+
+        <aside class="totals">
+            <h3>Resumo</h3>
+            @foreach (var (taxa, valor) in IvaPorTaxa())
+            {
+                <div class="row"><span>IVA @(taxa)%</span><span>@valor.ToString("0.00") €</span></div>
+            }
+            <div class="row"><span>Subtotal s/ IVA</span><span>@TotalSemIva().ToString("0.00") €</span></div>
+            <div class="row total"><span>TOTAL</span><span>@Total().ToString("0.00") €</span></div>
+
+            <button class="btn btn-primary big" disabled="@(linhas.Count == 0)" @onclick="GoPagamento">
+                Finalizar Venda
+            </button>
+            <button class="btn btn-secondary" @onclick="CancelarVenda" disabled="@(linhas.Count == 0)">
+                Cancelar Venda
+            </button>
+        </aside>
+    </div>
+}
+else if (stage == Stage.Pagamento)
+{
+    <div class="payment">
+        <h2>Pagamento</h2>
+        <div class="total-display">
+            <span class="label">Total a pagar</span>
+            <span class="value">@Total().ToString("0.00") €</span>
+        </div>
+
+        <div class="methods">
+            @foreach (var m in new[] { MetodoPagamento.Numerario, MetodoPagamento.Cartao, MetodoPagamento.MBWay })
+            {
+                <button class="method @(metodo == m ? "selected" : "")" @onclick="@(() => metodo = m)">
+                    @m.ToString()
+                </button>
+            }
+        </div>
+
+        @if (metodo == MetodoPagamento.Numerario)
+        {
+            <div class="form-group">
+                <label>Valor recebido (€)</label>
+                <input type="number" step="0.01" min="0" @bind="valorRecebido" class="form-control" />
+            </div>
+            @if (valorRecebido >= Total())
+            {
+                <div class="row total">
+                    <span>Troco</span><span>@((valorRecebido - Total()).ToString("0.00")) €</span>
+                </div>
+            }
+        }
+
+        <div class="form-group">
+            <label>NIF (opcional, fatura nominativa)</label>
+            <input @bind="clienteNif" class="form-control" maxlength="9" />
+        </div>
+
+        @if (!string.IsNullOrEmpty(payError))
+        {
+            <div class="alert alert-danger">
+                @payError
+                @if (payError.Contains("CAIXA"))
+                {
+                    <NavLink href="/caixa" class="btn btn-link">Ir para Caixa</NavLink>
+                }
+            </div>
+        }
+
+        <div class="actions">
+            <button class="btn btn-primary big" disabled="@(busy || !PaymentValid())" @onclick="ConfirmarPagamento">
+                @(busy ? "A processar..." : "Confirmar Pagamento")
+            </button>
+            <button class="btn btn-secondary" @onclick="@(() => stage = Stage.Carrinho)">Voltar</button>
+        </div>
+    </div>
+}
+else if (stage == Stage.Concluida && vendaFinal is not null)
+{
+    <div class="concluded">
+        <h2>✓ Venda concluída</h2>
+        <dl class="grid">
+            <dt>Fatura</dt><dd><strong>@vendaFinal.Fatura.NumeroCompleto</strong></dd>
+            <dt>Data</dt><dd>@vendaFinal.DataHora.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</dd>
+            <dt>Total</dt><dd>@vendaFinal.Total.ToString("0.00") €</dd>
+            @if (vendaFinal.Troco.HasValue && vendaFinal.Troco > 0)
+            {
+                <dt>Troco</dt><dd>@vendaFinal.Troco.Value.ToString("0.00") €</dd>
+            }
+            @if (!string.IsNullOrEmpty(vendaFinal.Fatura.ClienteNif))
+            {
+                <dt>NIF</dt><dd>@vendaFinal.Fatura.ClienteNif</dd>
+            }
+        </dl>
+
+        <button class="btn btn-primary big" @onclick="NovaVenda">Nova Venda</button>
+    </div>
+}
+
+@code {
+    private enum Stage { Carrinho, Pagamento, Concluida }
+
+    private Stage stage = Stage.Carrinho;
+    private bool loadingCatalog = true;
+    private bool busy;
+
+    private List<ProdutoResponse> produtos = new();
+    private readonly Dictionary<string, ProdutoResponse> byEan = new();
+
+    private List<CartLine> linhas = new();
+    private string eanInput = string.Empty;
+    private string? scanError;
+
+    private MetodoPagamento metodo = MetodoPagamento.Numerario;
+    private decimal valorRecebido;
+    private string clienteNif = string.Empty;
+    private string? payError;
+
+    private VendaResponse? vendaFinal;
+
+    private ElementReference eanInputRef;
+
+    protected override async Task OnInitializedAsync()
+    {
+        produtos = (await ProdutosApi.GetAllAsync()).ToList();
+        byEan.Clear();
+        foreach (var p in produtos) byEan[p.Ean13] = p;
+        loadingCatalog = false;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (stage == Stage.Carrinho && !loadingCatalog)
+        {
+            try { await eanInputRef.FocusAsync(); } catch { /* element gone */ }
+        }
+    }
+
+    private async Task OnEanKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await Task.Yield();
+            AddByEan();
+        }
+    }
+
+    private void AddByEan()
+    {
+        scanError = null;
+        var key = eanInput.Trim();
+        if (string.IsNullOrEmpty(key)) return;
+
+        if (!byEan.TryGetValue(key, out var produto))
+        {
+            // Pesquisa textual fallback (descrição contém)
+            var match = produtos.FirstOrDefault(p =>
+                p.Descricao.Contains(key, StringComparison.OrdinalIgnoreCase));
+            if (match is null)
+            {
+                scanError = $"Produto não encontrado para '{key}'.";
+                return;
+            }
+            produto = match;
+        }
+
+        if (!produto.Ativo)
+        {
+            scanError = $"Produto '{produto.Descricao}' está inativo.";
+            return;
+        }
+
+        var existing = linhas.FirstOrDefault(l => l.ProdutoId == produto.Id);
+        if (existing is not null) existing.Quantidade++;
+        else linhas.Add(CartLine.From(produto));
+
+        eanInput = string.Empty;
+    }
+
+    private void IncQty(CartLine l) => l.Quantidade++;
+    private void DecQty(CartLine l) { if (l.Quantidade > 1) l.Quantidade--; else linhas.Remove(l); }
+    private void Remove(CartLine l) => linhas.Remove(l);
+
+    private void GoPagamento()
+    {
+        if (linhas.Count == 0) return;
+        payError = null;
+        valorRecebido = Total();
+        stage = Stage.Pagamento;
+    }
+
+    private void CancelarVenda()
+    {
+        linhas.Clear();
+    }
+
+    private bool PaymentValid()
+    {
+        if (linhas.Count == 0) return false;
+        if (metodo == MetodoPagamento.Numerario && valorRecebido < Total()) return false;
+        if (!string.IsNullOrEmpty(clienteNif) && clienteNif.Length != 9) return false;
+        return true;
+    }
+
+    private async Task ConfirmarPagamento()
+    {
+        busy = true; payError = null;
+        try
+        {
+            var req = new CriarVendaRequest
+            {
+                MetodoPagamento = metodo,
+                ValorRecebido = metodo == MetodoPagamento.Numerario ? valorRecebido : null,
+                Linhas = linhas.Select(l => new LinhaVendaRequest
+                {
+                    ProdutoId = l.ProdutoId,
+                    Quantidade = l.Quantidade
+                }).ToList(),
+                Cliente = !string.IsNullOrWhiteSpace(clienteNif)
+                    ? new ClienteRequest { Nif = clienteNif }
+                    : null
+            };
+
+            var key = Guid.NewGuid().ToString();
+            var result = await VendasApi.CreateAsync(req, key);
+            if (result.Success && result.Venda is not null)
+            {
+                vendaFinal = result.Venda;
+                stage = Stage.Concluida;
+                return;
+            }
+            payError = result.ErrorCode switch
+            {
+                "CAIXA_NAO_ABERTA" => "Não há caixa aberta — abre uma primeiro.",
+                "STOCK_INSUFICIENTE" => "Stock insuficiente para um dos produtos.",
+                "VALOR_RECEBIDO_INSUFICIENTE" => "Valor recebido inferior ao total.",
+                "NIF_INVALIDO" => "NIF inválido (mod-11).",
+                "VENDA_SEM_LINHAS" => "Carrinho vazio.",
+                "PRODUTO_INATIVO" => "Produto na venda está inativo — atualiza catálogo.",
+                _ => $"Erro ao registar venda (HTTP {result.StatusCode}, {result.ErrorCode})"
+            };
+        }
+        finally { busy = false; }
+    }
+
+    private void NovaVenda()
+    {
+        linhas.Clear();
+        eanInput = string.Empty;
+        scanError = null;
+        clienteNif = string.Empty;
+        valorRecebido = 0;
+        metodo = MetodoPagamento.Numerario;
+        vendaFinal = null;
+        payError = null;
+        stage = Stage.Carrinho;
+    }
+
+    // ---- totals ----
+    private decimal Total() => linhas.Sum(l => l.Subtotal);
+    private decimal TotalSemIva() => linhas.Sum(l => l.SubtotalSemIva);
+
+    private IEnumerable<(int taxa, decimal valor)> IvaPorTaxa()
+        => linhas.GroupBy(l => l.TaxaIvaPercentagem)
+                 .OrderBy(g => g.Key)
+                 .Select(g => (g.Key, g.Sum(l => l.ValorIva)));
+
+    private class CartLine
+    {
+        public Guid ProdutoId { get; set; }
+        public string Ean13 { get; set; } = string.Empty;
+        public string Descricao { get; set; } = string.Empty;
+        public int Quantidade { get; set; }
+        public decimal PrecoUnitario { get; set; }
+        public int TaxaIvaPercentagem { get; set; }
+
+        public decimal Subtotal => Math.Round(PrecoUnitario * Quantidade, 2);
+        public decimal ValorIva
+            => Math.Round(Subtotal * TaxaIvaPercentagem / (100m + TaxaIvaPercentagem), 2);
+        public decimal SubtotalSemIva => Math.Round(Subtotal - ValorIva, 2);
+
+        public static CartLine From(ProdutoResponse p) => new()
+        {
+            ProdutoId = p.Id, Ean13 = p.Ean13, Descricao = p.Descricao,
+            Quantidade = 1, PrecoUnitario = p.Preco,
+            TaxaIvaPercentagem = p.TaxaIvaPercentagem
+        };
+    }
+}
+
+<style>
+    .venda-grid { display: grid; grid-template-columns: 1fr 360px;
+                  gap: 16px; padding: 16px; }
+    .cart { padding: 16px; border: 1px solid #ddd; border-radius: 8px; }
+    .totals { padding: 16px; border: 1px solid #ddd; border-radius: 8px;
+              background: #fafbfd; }
+    .totals .row { display: flex; justify-content: space-between; padding: 4px 0;
+                   border-bottom: 1px solid #eee; }
+    .totals .row.total { font-size: 1.4em; font-weight: 600; padding-top: 12px;
+                         border-top: 2px solid #333; border-bottom: none; }
+    .search-box { display: flex; gap: 8px; margin-bottom: 12px; }
+    .search-box input { flex: 1; }
+    .lines { width: 100%; border-collapse: collapse; }
+    .lines th, .lines td { padding: 8px; border-bottom: 1px solid #eee;
+                            text-align: left; }
+    .lines .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .empty { color: #888; padding: 24px; text-align: center; }
+    .form-control { padding: 8px; border: 1px solid #ccc; border-radius: 4px;
+                    box-sizing: border-box; width: 100%; }
+    .btn { padding: 10px 16px; border-radius: 4px; border: none;
+           cursor: pointer; text-decoration: none; display: inline-block;
+           min-height: 44px; }
+    .btn.big { width: 100%; padding: 16px; font-size: 1.1em; min-height: 60px; }
+    .btn.btn-tiny { padding: 4px 8px; min-height: auto; min-width: 32px; }
+    .btn-primary { background: #1f4ea1; color: white; }
+    .btn-secondary { background: #6c757d; color: white; margin-top: 8px; }
+    .btn-danger { background: #dc3545; color: white; }
+    .btn-link { background: none; color: #1f4ea1; text-decoration: underline; padding: 0; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .alert { padding: 8px; border-radius: 4px; margin: 8px 0; }
+    .alert-warning { background: #fff3cd; color: #664d03; }
+    .alert-danger { background: #f8d7da; color: #842029; }
+    .payment, .concluded { max-width: 600px; margin: 40px auto; padding: 24px;
+                           border: 1px solid #ddd; border-radius: 8px; }
+    .total-display { display: flex; justify-content: space-between; align-items: baseline;
+                     padding: 16px; background: #1f4ea1; color: white;
+                     border-radius: 4px; margin-bottom: 16px; }
+    .total-display .value { font-size: 2em; font-weight: 600; }
+    .methods { display: grid; grid-template-columns: repeat(3, 1fr);
+               gap: 8px; margin-bottom: 16px; }
+    .method { padding: 16px; border: 2px solid #ccc; background: white;
+              border-radius: 4px; cursor: pointer; min-height: 60px; font-size: 1em; }
+    .method.selected { border-color: #1f4ea1; background: #eef3fb; font-weight: 600; }
+    .form-group { margin-bottom: 12px; }
+    .form-group label { display: block; font-weight: 500; margin-bottom: 4px; }
+    .actions { display: flex; gap: 8px; flex-direction: column; }
+    .grid { display: grid; grid-template-columns: 140px 1fr; gap: 8px 16px; }
+    dt { color: #6c757d; }
+    dd { margin: 0; font-weight: 500; }
+    .footer-warning { font-size: 0.85em; color: #842029; padding: 8px;
+                      background: #f8d7da; border-radius: 4px; margin: 12px 0;
+                      font-weight: 600; text-align: center; }
+</style>

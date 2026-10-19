@@ -1,0 +1,299 @@
+@page "/promocoes/nova"
+@page "/promocoes/{Id:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "AdminCadeia")]
+@rendermode InteractiveServer
+@using BeloMercado.Application.Dtos.Promocoes
+@using BeloMercado.Application.Dtos.Catalogo
+@using BeloMercado.Application.Dtos.Lojas
+@using BeloMercado.BackofficeWeb.Auth
+@using BeloMercado.Domain.Enums
+@inject PromocoesApiClient PromocoesApi
+@inject ProdutosApiClient ProdutosApi
+@inject LojasApiClient LojasApi
+@inject ClockApiClient ClockApi
+@inject NavigationManager Nav
+
+<PageTitle>@(IsNew ? "Nova promoção" : "Editar promoção") — Belo Mercado</PageTitle>
+
+<div class="page">
+    <header class="page-header">
+        <h1>@(IsNew ? "Nova promoção" : "Editar promoção")</h1>
+        <a href="/promocoes" class="back-link">← Voltar à lista</a>
+    </header>
+
+    @if (loading)
+    {
+        <p>A carregar...</p>
+    }
+    else
+    {
+        <EditForm Model="model" OnValidSubmit="OnSubmit" FormName="promocao">
+            <DataAnnotationsValidator />
+
+            <div class="form-grid">
+                <div class="form-group form-wide">
+                    <label>Nome</label>
+                    <InputText @bind-Value="model.Nome" class="form-control" />
+                    <ValidationMessage For="@(() => model.Nome)" />
+                </div>
+
+                <div class="form-group form-wide">
+                    <label>Produto</label>
+                    @if (IsNew)
+                    {
+                        <InputSelect @bind-Value="model.ProdutoIdValue" class="form-control">
+                            <option value="">— escolher —</option>
+                            @foreach (var p in produtosAtivos)
+                            {
+                                <option value="@p.Id">@p.Descricao (@p.Ean13)</option>
+                            }
+                        </InputSelect>
+                    }
+                    else
+                    {
+                        <input class="form-control" value="@nomeProdutoFixo" disabled />
+                        <small class="hint">O produto não pode ser alterado depois de criada.</small>
+                    }
+                </div>
+
+                <div class="form-group">
+                    <label>Loja</label>
+                    <InputSelect @bind-Value="model.LojaIdValue" class="form-control">
+                        <option value="">Todas as lojas (global)</option>
+                        @foreach (var loja in lojas.Where(l => l.Ativo))
+                        {
+                            <option value="@loja.Id">@loja.Designacao</option>
+                        }
+                    </InputSelect>
+                </div>
+
+                <div class="form-group">
+                    <label>Tipo</label>
+                    <InputSelect @bind-Value="model.Tipo" class="form-control">
+                        <option value="@TipoPromocao.Percentagem">Percentagem (%)</option>
+                        <option value="@TipoPromocao.PrecoFixo">Preço fixo (€)</option>
+                    </InputSelect>
+                </div>
+
+                <div class="form-group">
+                    <label>
+                        Valor
+                        @if (model.Tipo == TipoPromocao.Percentagem) { <span> (% desconto)</span> }
+                        else { <span> (novo preço €)</span> }
+                    </label>
+                    <InputNumber @bind-Value="model.Valor" class="form-control" step="0.01" />
+                    <ValidationMessage For="@(() => model.Valor)" />
+                </div>
+
+                <div class="form-group">
+                    <label>Data início</label>
+                    <InputDate @bind-Value="model.DataInicio" class="form-control" />
+                    <ValidationMessage For="@(() => model.DataInicio)" />
+                </div>
+
+                <div class="form-group">
+                    <label>Data fim</label>
+                    <InputDate @bind-Value="model.DataFim" class="form-control" />
+                    <ValidationMessage For="@(() => model.DataFim)" />
+                </div>
+
+                @if (!IsNew)
+                {
+                    <div class="form-group form-check form-wide">
+                        <label>
+                            <InputCheckbox @bind-Value="model.Ativo" /> Ativa
+                        </label>
+                    </div>
+                }
+            </div>
+
+            @if (!string.IsNullOrEmpty(error))
+            {
+                <div class="alert alert-danger">@error</div>
+            }
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary" disabled="@busy">
+                    @(busy ? "A guardar..." : (IsNew ? "Criar" : "Guardar"))
+                </button>
+                <a href="/promocoes" class="btn btn-link">Cancelar</a>
+            </div>
+        </EditForm>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+
+    private bool IsNew => Id is null;
+
+    [SupplyParameterFromForm]
+    private FormModel model { get; set; } = new();
+
+    private List<ProdutoResponse> produtosAtivos = new();
+    private IReadOnlyList<LojaResponse> lojas = Array.Empty<LojaResponse>();
+    private string nomeProdutoFixo = "";
+    private bool loading = true;
+    private bool busy;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var prodTask = ProdutosApi.ListAsync();
+            var lojasTask = LojasApi.ListAsync();
+            var clockTask = ClockApi.GetTodayAsync();
+            await Task.WhenAll(prodTask, lojasTask, clockTask);
+            produtosAtivos = prodTask.Result.Where(p => p.Ativo).OrderBy(p => p.Descricao).ToList();
+            lojas = lojasTask.Result;
+            var hoje = clockTask.Result;
+            if (IsNew)
+            {
+                model.DataInicio = hoje;
+                model.DataFim = hoje.AddDays(7);
+            }
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+
+        if (!IsNew)
+        {
+            var existing = await PromocoesApi.GetByIdAsync(Id!.Value);
+            if (existing is null)
+            {
+                error = "Promoção não encontrada.";
+            }
+            else
+            {
+                model.Nome = existing.Nome;
+                model.ProdutoIdValue = existing.ProdutoId.ToString();
+                nomeProdutoFixo = $"{existing.ProdutoDescricao} ({existing.ProdutoEan13})";
+                model.LojaIdValue = existing.LojaId?.ToString() ?? "";
+                model.Tipo = Enum.TryParse<TipoPromocao>(existing.Tipo, out var t) ? t : TipoPromocao.Percentagem;
+                model.Valor = existing.Valor;
+                model.DataInicio = existing.DataInicio;
+                model.DataFim = existing.DataFim;
+                model.Ativo = existing.Ativo;
+            }
+        }
+        loading = false;
+    }
+
+    private async Task OnSubmit()
+    {
+        busy = true;
+        error = null;
+        try
+        {
+            Guid? lojaId = string.IsNullOrEmpty(model.LojaIdValue) ? null : Guid.Parse(model.LojaIdValue);
+
+            if (model.DataFim < model.DataInicio)
+            {
+                error = "A data de fim tem de ser igual ou posterior à de início.";
+                return;
+            }
+
+            if (IsNew)
+            {
+                if (!Guid.TryParse(model.ProdutoIdValue, out var prodId))
+                {
+                    error = "Escolhe um produto.";
+                    return;
+                }
+                var result = await PromocoesApi.CreateAsync(new CreatePromocaoRequest
+                {
+                    Nome = model.Nome,
+                    ProdutoId = prodId,
+                    LojaId = lojaId,
+                    Tipo = model.Tipo,
+                    Valor = model.Valor,
+                    DataInicio = model.DataInicio,
+                    DataFim = model.DataFim
+                });
+                if (result.Success) Nav.NavigateTo("/promocoes");
+                else error = MapError(result.ErrorCode, result.StatusCode);
+            }
+            else
+            {
+                var result = await PromocoesApi.UpdateAsync(Id!.Value, new UpdatePromocaoRequest
+                {
+                    Nome = model.Nome,
+                    LojaId = lojaId,
+                    Tipo = model.Tipo,
+                    Valor = model.Valor,
+                    DataInicio = model.DataInicio,
+                    DataFim = model.DataFim,
+                    Ativo = model.Ativo
+                });
+                if (result.Success) Nav.NavigateTo("/promocoes");
+                else error = MapError(result.ErrorCode, result.StatusCode);
+            }
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private static string MapError(string? code, int status) => code switch
+    {
+        "PROMOCAO_NAO_ENCONTRADA" => "Promoção não encontrada.",
+        "PRODUTO_NAO_ENCONTRADO" => "Produto não existe.",
+        "LOJA_NAO_ENCONTRADA" => "Loja não existe.",
+        "DATAS_INVALIDAS" => "Datas inválidas (fim antes do início).",
+        "VALOR_INVALIDO" => "Valor inválido para o tipo escolhido.",
+        null => $"Erro {status}.",
+        _ => code
+    };
+
+    public class FormModel
+    {
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Indica um nome para a promoção.")]
+        [System.ComponentModel.DataAnnotations.MaxLength(100, ErrorMessage = "Máximo 100 caracteres.")]
+        public string Nome { get; set; } = string.Empty;
+
+        public string ProdutoIdValue { get; set; } = "";
+
+        public string LojaIdValue { get; set; } = "";
+
+        public TipoPromocao Tipo { get; set; } = TipoPromocao.Percentagem;
+
+        [System.ComponentModel.DataAnnotations.Range(0.01, 99999.99,
+            ErrorMessage = "O valor tem de estar entre 0,01 e 99999,99.")]
+        public decimal Valor { get; set; }
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Indica a data de início.")]
+        public DateOnly DataInicio { get; set; } = DateOnly.FromDateTime(DateTime.Today);
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Indica a data de fim.")]
+        public DateOnly DataFim { get; set; } = DateOnly.FromDateTime(DateTime.Today).AddDays(7);
+
+        public bool Ativo { get; set; } = true;
+    }
+}
+
+<style>
+    .page { max-width: 100%; margin: 24px 0; padding: 0 24px; }
+    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .back-link { color: #1f4ea1; text-decoration: none; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 20px; }
+    .form-group { display: flex; flex-direction: column; }
+    .form-group.form-wide { grid-column: 1 / -1; }
+    .form-group.form-check label { display: flex; gap: 8px; align-items: center; }
+    .form-group label { font-weight: 500; margin-bottom: 4px; }
+    .form-control { padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+    .hint { color: #888; font-size: 0.8rem; margin-top: 4px; }
+    .form-actions { display: flex; gap: 12px; align-items: center; margin-top: 16px; }
+    .btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem; text-decoration: none; }
+    .btn-primary { background: #1f4ea1; color: white; }
+    .btn-link { background: none; color: #1f4ea1; }
+    .btn:disabled { opacity: 0.6; }
+    .alert-danger { padding: 8px; background: #f8d7da; color: #842029; border-radius: 4px; margin: 12px 0; }
+</style>

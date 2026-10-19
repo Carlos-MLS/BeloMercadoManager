@@ -1,0 +1,169 @@
+@page "/caixa/{Id:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using BeloMercado.Application.Dtos.Caixa
+@using BeloMercado.PosWeb.Auth
+@inject CaixasApiClient CaixasApi
+@inject NavigationManager Nav
+
+<PageTitle>Caixa @Id — Belo Mercado POS</PageTitle>
+
+@if (loading)
+{
+    <p>A carregar...</p>
+}
+else if (caixa is null)
+{
+    <div class="alert alert-warning">
+        Caixa não encontrada.
+        <NavLink href="/caixa">Voltar</NavLink>
+    </div>
+}
+else
+{
+    <div class="caixa-card">
+        <h2>Sessão de Caixa</h2>
+        <dl class="grid">
+            <dt>Estado</dt><dd><strong>@caixa.Estado</strong></dd>
+            <dt>Data</dt><dd>@caixa.Data.ToString("yyyy-MM-dd")</dd>
+            <dt>Aberta a</dt><dd>@caixa.DataHoraAbertura.ToLocalTime().ToString("HH:mm:ss")</dd>
+            <dt>Fundo inicial</dt><dd>@caixa.FundoInicial.ToString("0.00") €</dd>
+            @if (caixa.Estado == "Fechada")
+            {
+                <dt>Fechada a</dt><dd>@caixa.DataHoraFecho?.ToLocalTime().ToString("HH:mm:ss")</dd>
+                <dt>Valor esperado</dt><dd>@caixa.ValorEsperado?.ToString("0.00") €</dd>
+                <dt>Valor contado</dt><dd>@caixa.ValorContado?.ToString("0.00") €</dd>
+                <dt>Diferença</dt>
+                <dd class="@(caixa.Diferenca >= 0 ? "positive" : "negative")">
+                    @caixa.Diferenca?.ToString("+0.00;-0.00;0.00") €
+                </dd>
+                @if (!string.IsNullOrEmpty(caixa.Justificacao))
+                {
+                    <dt>Justificação</dt><dd>@caixa.Justificacao</dd>
+                }
+            }
+        </dl>
+
+        @if (caixa.Estado == "Aberta")
+        {
+            <hr />
+            <div class="action-row">
+                <NavLink href="/venda" class="btn btn-primary">Iniciar Venda</NavLink>
+                <NavLink href="@($"/caixa/{caixa.Id}/vendas")" class="btn btn-secondary">Vendas do dia</NavLink>
+            </div>
+            <h3 style="margin-top: 16px">Fechar Caixa</h3>
+            <EditForm Model="fechoModel" OnValidSubmit="OnFechar" FormName="fecharCaixa">
+                <DataAnnotationsValidator />
+
+                <div class="form-group">
+                    <label>Valor contado (€)</label>
+                    <InputNumber @bind-Value="fechoModel.ValorContado" class="form-control" step="0.01" min="0" />
+                    <ValidationMessage For="@(() => fechoModel.ValorContado)" />
+                    <small class="text-muted">
+                        Conta o numerário em caixa. Diferenças superiores a 10€
+                        em valor absoluto exigem justificação.
+                    </small>
+                </div>
+
+                <div class="form-group">
+                    <label>Justificação (opcional, obrigatória se diferença &gt; 10€)</label>
+                    <InputTextArea @bind-Value="fechoModel.Justificacao" class="form-control" rows="3" />
+                </div>
+
+                @if (!string.IsNullOrEmpty(error))
+                {
+                    <div class="alert alert-danger">@error</div>
+                }
+
+                <button type="submit" class="btn btn-danger w-100" disabled="@busy">
+                    @(busy ? "A fechar..." : "Fechar Caixa")
+                </button>
+            </EditForm>
+        }
+        else
+        {
+            <hr />
+            <NavLink href="/caixa" class="btn btn-primary">Abrir nova caixa</NavLink>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    [SupplyParameterFromForm] private FechoModel fechoModel { get; set; } = new();
+    private CaixaResponse? caixa;
+    private bool loading = true;
+    private bool busy;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        try
+        {
+            caixa = await CaixasApi.GetByIdAsync(Id);
+        }
+        finally { loading = false; }
+    }
+
+    private async Task OnFechar()
+    {
+        busy = true; error = null;
+        try
+        {
+            var result = await CaixasApi.FecharAsync(Id, fechoModel.ValorContado, fechoModel.Justificacao);
+            if (result.Success)
+            {
+                caixa = result.Caixa;
+                return;
+            }
+            error = result.ErrorCode switch
+            {
+                "CAIXA_JUSTIFICACAO_OBRIGATORIA" => "Diferença superior a 10€ requer justificação.",
+                "CAIXA_JA_FECHADA" => "Esta caixa já está fechada.",
+                "CAIXA_VALOR_CONTADO_INVALIDO" => "Valor contado inválido.",
+                _ => $"Erro ao fechar caixa (HTTP {result.StatusCode})."
+            };
+        }
+        finally { busy = false; }
+    }
+
+    public class FechoModel
+    {
+        [System.ComponentModel.DataAnnotations.Range(0, 99999.99, ErrorMessage = "Valor inválido.")]
+        public decimal ValorContado { get; set; } = 0;
+        public string? Justificacao { get; set; }
+    }
+}
+
+<style>
+    .caixa-card { max-width: 600px; margin: 40px auto; padding: 24px;
+                  border: 1px solid #ddd; border-radius: 8px; }
+    .grid { display: grid; grid-template-columns: 180px 1fr; gap: 6px 16px;
+            margin: 0 0 16px 0; }
+    dt { font-weight: 500; color: #6c757d; }
+    dd { margin: 0; }
+    .positive { color: #198754; font-weight: 500; }
+    .negative { color: #dc3545; font-weight: 500; }
+    .form-group { margin-bottom: 12px; }
+    .form-group label { display: block; font-weight: 500; margin-bottom: 4px; }
+    .form-control { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+    .text-muted { color: #6c757d; font-size: 0.9em; }
+    .btn { padding: 10px 16px; border-radius: 4px; border: none;
+           cursor: pointer; display: inline-block; text-decoration: none; }
+    .btn-primary { background: #1f4ea1; color: white; }
+    .btn-secondary { background: #6c757d; color: white; }
+    .btn-danger { background: #dc3545; color: white; }
+    .action-row { display: flex; gap: 12px; flex-wrap: wrap; }
+    .btn:disabled { opacity: 0.5; }
+    .alert { padding: 8px; border-radius: 4px; margin-bottom: 8px; }
+    .alert-danger { background: #f8d7da; color: #842029; }
+    .alert-warning { background: #fff3cd; color: #664d03; }
+    .w-100 { width: 100%; }
+    hr { border: none; border-top: 1px solid #eee; margin: 16px 0; }
+</style>

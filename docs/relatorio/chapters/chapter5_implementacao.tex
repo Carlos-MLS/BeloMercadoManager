@@ -1,0 +1,206 @@
+%==========================================================================
+% CAPÍTULO 5 — Implementação e Desenvolvimento Assistido por LLM
+%==========================================================================
+\chapter{Implementação e Desenvolvimento Assistido por LLM}
+
+    Após a fase de arquitetura e \textit{design} (Capítulo~4), em que ficaram definidos os limites do sistema, as camadas, as entidades e os contratos das APIs, partiu-se para a codificação efetiva do Belo Mercado Manager. Todo o código aplicacional foi gerado pelo LLM a partir das especificações já produzidas nos Capítulos~3 e~4 (casos de uso, modelo de domínio, diagramas de classes e de sequência, especificação da API), cabendo aos elementos da equipa a tarefa de rever, testar e identificar correções a fazer. Sempre que era detetado um problema, o LLM era convocado para o corrigir, num ciclo \textit{geração~$\to$~revisão humana~$\to$~correção pelo LLM} repetido tantas vezes quantas necessárias.
+
+    O resultado consolidado é uma solução .NET~8 com seis projetos, cerca de 22 entidades de domínio, 10 serviços de aplicação e respetivos repositórios, uma API REST documentada com \textit{Swagger}, e dois \textit{front-ends} Blazor Server (POS e \textit{Backoffice}).
+
+%--------------------------------------------------------------------------
+\section{Configuração do Ambiente de Desenvolvimento}
+%--------------------------------------------------------------------------
+
+    Antes de qualquer linha de código aplicacional, foi necessário estabelecer um ambiente comum a toda a equipa, capaz de garantir que ``corre na minha máquina'' significa também ``corre nas outras quatro''. Cada elemento da equipa tem instalado o .NET~8 SDK, Visual Studio Code com as extensões \textit{C\# Dev Kit}, \textit{SQL Server (mssql)} e \textit{Claude Code}, e Docker para executar uma instância local de SQL~Server~2022. O sistema operativo é livre, desde que suporte o .NET~8 e o Docker.
+
+    A configuração não-comum (a \textit{password} do utilizador \texttt{sa} da BD local e a chave de assinatura JWT) é mantida fora do controlo de versões através do mecanismo \texttt{dotnet user-secrets}, inicializado uma vez por \textit{developer} no projeto da API. Esta separação cumpre dois objetivos: nenhum segredo viaja em \textit{git}, e o ficheiro \texttt{appsettings.Development.json} continua versionável e útil para configurações partilhadas (níveis de \textit{log}, URLs locais, \textit{feature flags}).
+
+    A Tabela~\ref{tab:ambiente_dev} sumariza os comandos de arranque que cada elemento da equipa corre uma única vez na sua máquina, todos eles documentados em \texttt{setup.txt}.
+
+    \begin{table}[H]
+    \centering
+    \small
+    \begin{tabular}{|p{4cm}|p{10cm}|}
+    \hline
+    \textbf{Passo} & \textbf{Comando / Ação} \\
+    \hline
+    Instalar .NET~8 SDK & Via instalador oficial Microsoft para o respetivo sistema operativo. \\
+    \hline
+    Arrancar SQL Server  & \texttt{docker run -e "ACCEPT\_EULA=Y" -e "MSSQL\_SA\_PASSWORD=..." -p 1433:1433 -d mcr.microsoft.com/mssql/server:2022-latest} \\
+    \hline
+    Inicializar \textit{secrets} & \texttt{dotnet user-secrets init} no projeto \texttt{BeloMercado.Api} \\
+    \hline
+    \textit{Connection string} & \texttt{dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Server=localhost,1433;..."} \\
+    \hline
+    Chave JWT & \texttt{dotnet user-secrets set "Jwt:Key" "..."} \\
+    \hline
+    Aplicar \textit{migrations} & \texttt{dotnet ef database update} no projeto da API \\
+    \hline
+    \end{tabular}
+    \caption{Comandos de configuração inicial do ambiente de desenvolvimento.}
+    \label{tab:ambiente_dev}
+    \end{table}
+
+    \begin{tcolorbox}[title=Interação com o LLM]
+    \textbf{Prompt utilizado}
+
+    Temos uma equipa de cinco pessoas a desenvolver localmente, com SQL Server na máquina de cada um, e queremos uma forma de não partilhar credenciais em \textit{git}. Que abordagem recomendas para configurar o ambiente de cada \textit{developer} e garantir consistência entre máquinas?
+
+    \tcblower
+
+    \textbf{Análise crítica}
+
+    A proposta inicial do LLM passava por containerizar tudo (.NET app e SQL Server) num \texttt{docker-compose}, o que adicionava uma camada de complexidade que para esta fase não compensava: cada elemento da equipa teria de reconstruir a imagem da aplicação a cada alteração, e o \textit{hot reload} do \texttt{dotnet watch} ficava inutilizável. Optou-se por uma abordagem híbrida: a aplicação .NET corre nativamente (\texttt{dotnet run}) e apenas o SQL~Server fica em Docker.
+
+    A sugestão de \texttt{dotnet user-secrets} para a \textit{connection string} e para a chave JWT foi mantida sem alterações e ficou refletida no \texttt{setup.txt}, que serve de guião de arranque para qualquer novo elemento que se junte ao projeto.
+    \end{tcolorbox}
+
+%--------------------------------------------------------------------------
+\section{Estratégia de Implementação Incremental}
+%--------------------------------------------------------------------------
+
+    Com quinze casos de uso em âmbito e três semanas de implementação, foi necessário sequenciar o trabalho de forma a maximizar o paralelismo entre os cinco elementos da equipa e a ter uma versão demonstrável o mais cedo possível.
+
+    A abordagem adotada foi incremental, organizada em \textit{blocos verticais}: cada bloco corresponde a um ou poucos casos de uso e atravessa todas as camadas (Domain, Application, Infrastructure, API e, quando aplicável, UI). A ordem dos blocos não seguiu a numeração natural dos UCs. Em vez disso, foram priorizados (i)~os blocos de fundação que outros UCs assumem como pré-requisito, como a autenticação e a infraestrutura transversal, e (ii)~os blocos administrativos que enchem a BD com os dados necessários para testar os UCs operacionais.
+
+    \begin{tcolorbox}[title=Interação com o LLM]
+    \textbf{Prompt utilizado}
+
+    Temos quinze casos de uso para implementar em três semanas com uma equipa pequena. Como devemos sequenciar o trabalho para maximizar o paralelismo e ter algo demonstrável o mais cedo possível?
+
+    \tcblower
+
+    \textbf{Análise crítica}
+
+    A proposta inicial do LLM seguia a numeração natural dos UCs (UC01, UC02, ...), o que colocava o POS no início mas tornava-o praticamente intestável: sem catálogo, sem stock e sem utilizadores, qualquer venda falhava à primeira validação. A equipa fez uma análise de dependências entre UCs e pediu ao LLM para reorganizar a ordem: primeiro a autenticação (que tudo o resto pressupõe), depois os UCs administrativos (lojas, catálogo, utilizadores) que enchem a BD com dados de teste, e só depois os UCs operacionais do POS.
+
+    Esta reorganização teve um benefício adicional não previsto: a partir do segundo dia de implementação foi possível ter uma versão executável que demonstrava o fluxo \textit{login~$\to$~criar produto~$\to$~criar loja}, o que serviu de prova de coerência arquitetural ainda muito cedo no \textit{sprint}.
+    \end{tcolorbox}
+
+%--------------------------------------------------------------------------
+\section{Arquitetura em Camadas e Separação de Responsabilidades}
+%--------------------------------------------------------------------------
+
+    A solução está organizada em seis projetos .NET~8, com referências entre eles desenhadas para preservar a direção das dependências definida no Capítulo~4: a camada de \textit{Domain} não conhece nenhuma outra camada, a \textit{Application} depende apenas do \textit{Domain}, a \textit{Infrastructure} implementa as interfaces da \textit{Application}, e os pontos de entrada (API e UIs Blazor) compõem o sistema final. A Tabela~\ref{tab:projetos_solucao} sumariza cada projeto.
+
+    \begin{table}[H]
+    \centering
+    \small
+    \begin{tabular}{|p{4.5cm}|p{9.5cm}|}
+    \hline
+    \textbf{Projeto} & \textbf{Responsabilidade} \\
+    \hline
+    \texttt{BeloMercado.Domain} & Entidades, \textit{value objects}, \textit{enums}. Sem dependências externas. \\
+    \hline
+    \texttt{BeloMercado.Application} & Serviços de aplicação, DTOs, interfaces (repositórios, \textit{audit}, \textit{auth}), validadores. \\
+    \hline
+    \texttt{BeloMercado.Infrastructure} & EF~Core (\texttt{DbContext}, \textit{configurations}, \textit{migrations}), implementações dos repositórios, BCrypt, geração de JWT, \textit{hosted service} de consolidação. \\
+    \hline
+    \texttt{BeloMercado.Api} & ASP.NET Core REST API, controladores, \textit{middleware} de \textit{auth} e tratamento de erros, OpenAPI. \\
+    \hline
+    \texttt{BeloMercado.PosWeb} & Blazor Server para o POS (vendas, caixa, devoluções). \\
+    \hline
+    \texttt{BeloMercado.BackofficeWeb} & Blazor Server para o \textit{backoffice} (catálogo, utilizadores, lojas, \textit{dashboards}). \\
+    \hline
+    \end{tabular}
+    \caption{Projetos da solução e respetivas responsabilidades.}
+    \label{tab:projetos_solucao}
+    \end{table}
+
+    Uma regra importante, que se reforçou ao longo da implementação, é que os projetos \textit{Blazor} \textbf{não} podem referenciar \textit{Services} ou interfaces da camada de \textit{Application}: apenas os DTOs. A invocação da camada de aplicação é feita exclusivamente por HTTP, através da \texttt{BeloMercado.Api}, mesmo que ambas as aplicações corram no mesmo \textit{host}. Esta regra impede o atalho tentador de injetar diretamente um \texttt{SalesService} numa página Blazor, o que tornaria muito difícil migrar mais tarde a UI para uma SPA externa.
+
+    \begin{tcolorbox}[title=Interação com o LLM]
+    \textbf{Prompt utilizado}
+
+    Como devo organizar os projetos da solução para preservar a separação entre \textit{Domain}, \textit{Application} e \textit{Infrastructure}? Que referências entre projetos devem ser permitidas e que regras devo escrever para garantir que isso é respeitado ao longo do tempo?
+
+    \tcblower
+
+    \textbf{Análise crítica}
+
+    O LLM defendeu inicialmente uma versão estrita de \textit{Clean Architecture} em que a camada de \textit{Application} ficaria dividida em dois projetos: \textit{Application.Abstractions} (só interfaces) e \textit{Application.Services} (implementações). Para um sistema desta dimensão e uma equipa pequena, isso era \textit{overkill}: duplicava o número de \textit{namespaces}, complicava as referências e não trazia ganho prático. A equipa pediu ao LLM para manter a \textit{Application} num projeto único.
+
+    Em compensação, foi necessário reforçar duas regras que o LLM tendia a violar e que, sempre que detetadas em revisão, eram alvo de pedido de correção: (i)~não usar atributos \texttt{[Column]}, \texttt{[Table]} ou outros do EF~Core em entidades do \textit{Domain}, dado que as configurações de mapeamento vivem apenas na \textit{Infrastructure}, via \textit{Fluent API}; e (ii)~os projetos Blazor nunca referenciam diretamente os \textit{Services}, consumindo a API só por HTTP.
+    \end{tcolorbox}
+
+%--------------------------------------------------------------------------
+\section{Geração de Código Assistida por LLM}
+%--------------------------------------------------------------------------
+
+    Todo o código aplicacional foi gerado pelo LLM a partir dos artefactos produzidos nos Capítulos~3 e~4: os casos de uso forneciam a lógica do que cada serviço tinha de fazer, o modelo de domínio definia as entidades a manipular, os diagramas de sequência indicavam a colaboração entre componentes, e a especificação da API fixava os contratos HTTP. Para cada bloco de implementação, um elemento da equipa preparava uma sessão com o LLM, indicava o ou os casos de uso a cobrir e pedia a implementação dos ficheiros novos.
+
+    A produtividade observada foi elevada em três tipos de tarefa em particular: o \textit{boilerplate} de mapeamento entre DTOs e entidades, as implementações de repositórios (todas seguem o mesmo padrão \texttt{DbContext} + \texttt{DbSet} + LINQ), e os controladores da API (que partilham a mesma estrutura: receção do DTO, chamada ao \textit{Service}, tradução do \texttt{OperationResult} em código HTTP).
+
+    Para regras de negócio, o trabalho foi mais artesanal e exigiu mais iterações entre o LLM e a equipa. A título ilustrativo, o método \texttt{SalesService.CriarVendaAsync}, núcleo do UC01, envolve oito decisões interligadas: verificação da caixa aberta, validação do NIF do cliente, snapshot do preço e descrição do produto, aplicação automática de promoção, cálculo de IVA por linha, geração da fatura sequencial, decremento atómico do \textit{stock} e registo de auditoria. O primeiro \textit{output} do LLM cobriu o caminho principal mas omitiu a aplicação da promoção e usou um cálculo de IVA incorreto (IVA aplicado sobre o preço sem IVA, quando o SRS especifica preço com IVA incluído). Foram necessárias três iterações até chegar à versão final.
+
+    \begin{tcolorbox}[title=Interação com o LLM]
+    \textbf{Prompt utilizado}
+
+    Implementa o \textit{Service} responsável pelo UC X, seguindo a especificação que está no Capítulo~3 do relatório e o diagrama de sequência correspondente no Capítulo~4. Garante a integridade transacional e o registo de auditoria para todas as operações de escrita.
+
+    \tcblower
+
+    \textbf{Análise crítica}
+
+    O LLM mostrou-se especialmente eficaz a gerar a estrutura repetitiva (assinaturas, injeção de dependências, mapeamentos), mas falhava com aspetos transversais e com regras de negócio subtis. Dois exemplos ilustram bem o padrão.
+
+    Em primeiro lugar, vários \textit{endpoints} estavam inicialmente a devolver dados de todas as lojas a um Gerente, em vez de filtrarem pelo \textit{claim} \texttt{lojaId} do JWT. O \textit{bug} só foi detectado em testes manuais por um elemento da equipa, que voltou a pedir ao LLM para introduzir essa verificação em todos os \textit{endpoints} de âmbito por loja.
+
+    Em segundo lugar, o LLM esquecia-se ocasionalmente de envolver as escritas no \texttt{IUnitOfWork.SaveChanges}, deixando alterações em memória que nunca chegavam à BD. Este padrão acabou por levar à criação dos testes de integração com o \texttt{DbContext} real (Capítulo~6), precisamente para apanhar este tipo de omissão antes da ronda manual.
+    \end{tcolorbox}
+
+%--------------------------------------------------------------------------
+\section{Revisão Humana e Correção pelo LLM}
+%--------------------------------------------------------------------------
+
+    Apesar da geração automatizada do código, a revisão e a deteção de problemas ficaram a cargo dos elementos da equipa. O processo seguia sempre o mesmo ciclo: o LLM gerava o código para o bloco em mãos; um elemento da equipa lia atentamente o resultado e executava-o localmente, comparando o seu comportamento com aquilo que estava especificado nos casos de uso e nos diagramas de sequência; quando era detetado um defeito, fosse de correção, de segurança, de estilo ou de coerência arquitetural, o problema era reportado ao LLM com instruções claras de correção. Esta abordagem inverte o papel habitual entre humano e IA: o LLM é a fonte de produção, mas o critério de aceitação é humano.
+
+    O \textit{debug} propriamente dito, que envolve compreender porque um determinado teste falhava ou porque um \textit{endpoint} devolvia dados errados, foi também conduzido pelos elementos da equipa, recorrendo às ferramentas habituais (\textit{breakpoints} no Visual Studio Code, \textit{logs} do Serilog, inspeção direta da BD via \textit{Azure Data Studio}). Apenas depois de localizada a causa raiz é que o LLM era novamente chamado, agora com uma descrição precisa do problema e do comportamento esperado, para propor a correção. Esta divisão de trabalho revelou-se eficaz: o esforço cognitivo de identificar a causa de um \textit{bug} ficou do lado humano, e o esforço mecânico de escrever a correção ficou do lado do LLM.
+
+    \begin{tcolorbox}[title=Interação com o LLM]
+    \textbf{Prompt utilizado}
+
+    Detetámos o seguinte problema neste módulo: [descrição precisa do comportamento observado e do esperado, com indicação do ficheiro e da linha]. Corrige o código de forma a satisfazer o comportamento esperado, sem alterar partes do ficheiro que não estejam diretamente relacionadas.
+
+    \tcblower
+
+    \textbf{Análise crítica}
+
+    A qualidade das correções produzidas pelo LLM dependeu fortemente da precisão da descrição do \textit{bug} que recebia. Pedidos vagos (``este teste falha, arranja'') resultavam frequentemente em alterações exageradas: o LLM reescrevia métodos inteiros ou ``simplificava'' partes adjacentes que não tinham qualquer problema, introduzindo regressões. Pedidos cirúrgicos, com a linha exata onde o problema ocorria, o valor observado e o valor esperado, produziam correções focadas e fiáveis.
+
+    Outra lição relevante foi a importância de impedir explicitamente que o LLM tocasse em ficheiros não relacionados com o \textit{bug}. Sem essa restrição, o modelo tinha tendência a aproveitar a correção para fazer ``melhoramentos'' transversais não pedidos, como renomear variáveis, extrair métodos ou alterar formatações, que dificultavam a revisão do \textit{diff} e aumentavam o risco de regressão.
+    \end{tcolorbox}
+
+%--------------------------------------------------------------------------
+\section{Deteção de \textit{Code Smells} e \textit{Refactoring}}
+%--------------------------------------------------------------------------
+
+    No final de cada bloco implementado, a equipa fazia uma passagem específica de deteção de \textit{code smells} e de oportunidades de \textit{refactoring}. O objetivo não era perseguir a perfeição estética, pouco compatível com um prazo curto, mas sim eliminar duplicação significativa, tornar regras de negócio explícitas e simplificar caminhos de leitura que se tinham complicado durante a geração inicial.
+
+    A regra prática que se adotou foi: aceitar \textit{refactorings} que reduzem duplicação acima de cinco linhas ou que tornam uma regra de negócio mais explícita; rejeitar \textit{refactorings} que aumentam o número de ficheiros, camadas ou \textit{abstractions} sem ganho mensurável. Esta linha permitiu manter a base de código compacta e legível, em vez de a sobrecarregar com padrões de \textit{design} prematuramente.
+
+    Um exemplo concreto de \textit{refactoring} aceite, e pedido ao LLM para implementar, foi a extração do método \texttt{BuildVendaResponse} no \texttt{SalesService}: a lógica de transformar uma \texttt{Venda} numa \texttt{VendaResponse} estava duplicada em três métodos distintos (criação, anulação, devolução parcial) com pequenas variações no carregamento da fatura associada. A extração reduziu o tamanho do ficheiro em cerca de 30 linhas e tornou óbvio que os três caminhos partilhavam a mesma forma de resposta.
+
+    \begin{tcolorbox}[title=Interação com o LLM]
+    \textbf{Prompt utilizado}
+
+    Que oportunidades de melhoria identificas neste módulo, ao nível da legibilidade e da redução de duplicação? Para cada proposta, indica o ganho concreto e o risco associado.
+
+    \tcblower
+
+    \textbf{Análise crítica}
+
+    O LLM tende a ser criativo demais: propunha frequentemente extrair classes, criar interfaces, reorganizar a estrutura por \textit{feature} ou substituir condicionais por \textit{strategy pattern}. Muitas destas propostas faziam sentido em sistemas grandes mas eram \textit{overkill} para um projeto desta dimensão, e foram descartadas pela equipa.
+
+    A maior valia do modelo nesta fase foi a deteção rápida de duplicação genuína e de variáveis com \textit{naming} inconsistente entre ficheiros relacionados. Aceites apenas as sugestões que cumpriam a regra de \textit{trade-off} acima, as propostas restantes foram registadas como possíveis melhorias para uma fase posterior ao protótipo académico, em que o ciclo de vida do produto justifique o investimento.
+    \end{tcolorbox}
+
+%--------------------------------------------------------------------------
+\section{Conclusão da Etapa}
+%--------------------------------------------------------------------------
+
+    A Etapa~3 entregou uma solução .NET~8 funcional com seis projetos, cobrindo os quinze casos de uso em âmbito, e construída integralmente por um LLM a partir das especificações produzidas nas etapas anteriores. O código está organizado em camadas com regras de referência claras e segue \textit{Conventional Commits} na sua história.
+
+    Em termos de processo, o desenvolvimento incremental por blocos verticais provou-se adequado para uma equipa pequena com prazo curto: cada bloco fechava com um \textit{commit} testável e nenhum bloco ficou bloqueado por dependências mal sequenciadas. O LLM revelou-se especialmente produtivo nas tarefas de \textit{boilerplate} (mapeamentos, repositórios, controladores) e na aplicação de correções cirúrgicas a pedido da equipa, mas insuficiente quando se tratava de validar autonomamente a correção da lógica de negócio, limitação que motivou diretamente a estratégia de testes descrita no Capítulo~6.
+
+    Os principais aprendizados desta etapa, transversais a futuros projetos com este formato, são dois. Primeiro, o LLM precisa de receber as \textit{interfaces reais} do projeto e os artefactos previamente definidos (casos de uso, modelo de domínio, diagramas) antes de implementar; sem essa ancoragem, tende a inventar APIs plausíveis mas inexistentes. Segundo, a revisão humana continua a ser o garante final da correção do negócio, especialmente nos UCs em que há matemática, regras temporais ou questões de segurança envolvidas: o LLM é excelente como executor mas o critério de aceitação tem de ficar do lado da equipa.
